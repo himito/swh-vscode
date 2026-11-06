@@ -1,7 +1,20 @@
+/**
+ * Unit tests of the pure functions: SWHIDs, origins, citations and the scan model.
+ *
+ * @remarks
+ * These tests need neither VS Code, Git nor the network. Run them with
+ * `npm test`, which compiles the project and runs `node --test` on the
+ * compiled `*.test.js` files.
+ *
+ * @packageDocumentation
+ */
+
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import {
   ancestors,
+  buildScan,
+  citation,
   encodeOrigin,
   encodePath,
   findSwhids,
@@ -10,12 +23,12 @@ import {
   pathOrigin,
   qualifiers,
   qualify,
+  scanSummary,
   shortSwhid,
   versionAtLeast,
-} from '../src/swhid';
-import { citation } from '../src/citation';
-import { buildScan, scanSummary } from '../src/scanModel';
+} from '../src/core';
 
+// Git remote URLs of every form become the URLs the archive knows origins by.
 test('normalizeOrigin', () => {
   const cases: Array<[string, string]> = [
     ['https://github.com/bzg/swh.el.git', 'https://github.com/bzg/swh.el'],
@@ -37,7 +50,8 @@ test('normalizeOrigin', () => {
   assert.deepEqual(originCandidates('/srv/repo'), ['/srv/repo']);
 });
 
-// values from swhid-clj, which the daemon renders qualifiers with
+// Qualifier values are percent-encoded as swhd encodes them; the expected
+// values come from swhid-clj, the library swhd renders qualifiers with.
 test('qualify encoding', () => {
   assert.equal(encodeOrigin('https://h/o r\tx\u00a0é'), 'https://h/o%20r%09x%C2%A0é');
   assert.equal(encodePath('/src/my file é;%.el'), '/src/my%20file%20%C3%A9%3B%25.el');
@@ -58,6 +72,7 @@ test('qualify encoding', () => {
   assert.equal(pathOrigin('https://h/a b?c#d'), 'https://h/a%20b%3Fc%23d');
 });
 
+// Path ancestors, shortened SWHIDs, and swhd version comparison.
 test('helpers', () => {
   assert.deepEqual(ancestors('.'), []);
   assert.deepEqual(ancestors('a.txt'), ['.']);
@@ -70,6 +85,8 @@ test('helpers', () => {
   assert.ok(!versionAtLeast(undefined, '0.8.0'));
 });
 
+// SWHIDs are found in text with their qualifiers but without trailing
+// punctuation; malformed ones are skipped.
 test('findSwhids', () => {
   const h = '94a9ed024d3859793618152ea559a168bbcbb5e2';
   const text = `See swh:1:cnt:${h};origin=https://h/r;lines=2-3. And {swh:1:dir:${h}} or swh:1:cnt:abc.`;
@@ -79,6 +96,8 @@ test('findSwhids', () => {
   );
 });
 
+// Minimal BibTeX entries: type and key by object type, optional fields left
+// out, and the archive's own entry passed through as is.
 test('citation', () => {
   const swhid = 'swh:1:cnt:94a9ed024d3859793618152ea559a168bbcbb5e2;origin=https://example.org/me/repo';
   assert.deepEqual(citation('no-metadata', 'swh:1:cnt:94a9ed024d3859793618152ea559a168bbcbb5e2', swhid, 'repo', 'https://example.org/me/repo'), [
@@ -92,6 +111,7 @@ test('citation', () => {
   assert.deepEqual(citation({ entry: '@x{}' }, 'swh:1:cnt:a', 's'), ['@x{}', 'archive']);
 });
 
+// The scan tree: path order, parent links, per-directory counts, statuses and summary.
 test('scan model', () => {
   const scan = buildScan([
     { path: 'sub/b.txt', swhid: 'swh:1:cnt:b', dir: false, archived: true },

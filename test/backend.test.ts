@@ -1,4 +1,17 @@
-// The direct backend on a real Git repository, the archive faked.
+/**
+ * Tests of the backend without the daemon, on a real Git repository with a
+ * fake archive.
+ *
+ * @remarks
+ * One temporary repository serves the whole file, and `globalThis.fetch` is
+ * replaced with a fake Software Heritage archive. It answers the `/known/`,
+ * latest visit and save requests from {@link archived} and {@link origins}.
+ * Requests to the daemon's port fail, as when swhd is not running, so the
+ * backend talks to the archive directly. No network is needed. Run them
+ * with `npm test`.
+ *
+ * @packageDocumentation
+ */
 
 import { test, before, after } from 'node:test';
 import * as assert from 'node:assert/strict';
@@ -6,23 +19,45 @@ import { execFileSync } from 'child_process';
 import { promises as fs, realpathSync, mkdtempSync, writeFileSync, mkdirSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Swh } from '../src/backend';
-import { Git } from '../src/git';
+import { Git, Swh } from '../src/core';
 
+/** The temporary Git repository the tests run on, created before them. */
 let dir: string;
-const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
 
-/** What the fake archive holds, and what it was asked. */
+/**
+ * Run git in the temporary repository.
+ *
+ * @param args - The git arguments.
+ * @returns Git's standard output, trimmed.
+ */
+const git =(...args: string[]) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+
+/** The SWHIDs the fake archive holds. */
 let archived = new Set<string>();
+/** The origin URLs the fake archive has visited. */
 let origins = new Set<string>();
+/** The SWHIDs of each `/known/` request the fake archive received, in order. */
 let asked: string[][] = [];
+/** Every request the fake archive received, as `METHOD URL`. */
 let requests: string[] = [];
+/** The real `fetch`, put back after the tests. */
 const realFetch = globalThis.fetch;
 
+/**
+ * A JSON response of the fake archive.
+ *
+ * @param status - The HTTP status.
+ * @param body - The body, serialized as JSON.
+ * @param headers - Extra headers, e.g. the rate limit ones.
+ * @returns The response.
+ */
 function json(status: number, body: unknown, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } });
 }
 
+// Create the repository: a.txt and sub/b.txt in one commit, and a remote that
+// is never contacted. Then replace `fetch` with the fake archive; the daemon's
+// port refuses connections.
 before(() => {
   dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'swh-test-')));
   git('init', '-q', '-b', 'main');
@@ -61,11 +96,18 @@ before(() => {
   }) as typeof fetch;
 });
 
+// Put the real `fetch` back and delete the repository.
 after(async () => {
   globalThis.fetch = realFetch;
   await fs.rm(dir, { recursive: true, force: true });
 });
 
+/**
+ * A backend talking to the fake archive, with no daemon.
+ *
+ * @param token - The API token it sends, if any.
+ * @returns A fresh backend, its memos empty.
+ */
 function swh(token?: string) {
   return new Swh({
     archiveUrl: () => 'https://archive.example.org',
@@ -76,6 +118,12 @@ function swh(token?: string) {
   });
 }
 
+/**
+ * Reset the fake archive, and forget the requests it received.
+ *
+ * @param a - The SWHIDs it holds.
+ * @param o - The origins it has visited.
+ */
 const reset = (a: string[] = [], o: string[] = []) => {
   archived = new Set(a);
   origins = new Set(o);
@@ -83,6 +131,8 @@ const reset = (a: string[] = [], o: string[] = []) => {
   requests = [];
 };
 
+// Repository root, content and directory SWHIDs as Git computes them, and the
+// remote normalized into an origin.
 test('git root and content SWHID', async () => {
   const s = swh();
   assert.equal(await s.git.root(path.join(dir, 'sub', 'b.txt')), dir);
@@ -92,6 +142,8 @@ test('git root and content SWHID', async () => {
   assert.equal(await s.originOf(dir), 'https://example.org/me/repo');
 });
 
+// The working tree's tree includes edits but not untracked files; computing it,
+// or the HEAD tree of a directory, never touches the repository's index.
 test('worktree tree leaves the index alone', async () => {
   const s = swh();
   const head = git('rev-parse', 'HEAD^{tree}');
@@ -110,6 +162,8 @@ test('worktree tree leaves the index alone', async () => {
   assert.equal(await s.headTree(dir, dir), head);
 });
 
+// An archived directory covers everything under it: the archive is asked only
+// about what no archived directory covers, directories first.
 test('direct tree is Merkle-pruned', async () => {
   const rootSwhid = 'swh:1:dir:' + git('rev-parse', 'HEAD^{tree}');
   const subSwhid = 'swh:1:dir:' + git('rev-parse', 'HEAD:sub');
@@ -133,6 +187,8 @@ test('direct tree is Merkle-pruned', async () => {
   assert.deepEqual(asked[1], [aSwhid]);
 });
 
+// The full qualified SWHID (origin, visit, anchor, path, lines), the archived
+// version of an edited file, the rate limit, and why a file is not archived.
 test('qualified SWHID, anchored and archived', async () => {
   const commit = git('rev-parse', 'HEAD');
   const aSwhid = 'swh:1:cnt:' + git('rev-parse', 'HEAD:a.txt');
@@ -161,6 +217,8 @@ test('qualified SWHID, anchored and archived', async () => {
   assert.equal(await s.unarchivedWhy(path.join(dir, 'a.txt')), 'the commit holding it is not pushed');
 });
 
+// The origin's status, save requests, and the SWHID from Git alone when the
+// archive cannot be reached.
 test('status, unreachable archive, save', async () => {
   reset([], ['https://example.org/me/repo']);
   const s = swh();

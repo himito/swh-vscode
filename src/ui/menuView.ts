@@ -1,18 +1,38 @@
-// The menu of the commands, in the Software Heritage side bar.
+/**
+ * The Menu view: the extension's commands, in the Software Heritage side bar.
+ *
+ * @remarks
+ * {@link MenuView} fills the `swh.actions` tree view with the commands, in
+ * groups. Clicking an entry runs its command, on the current file,
+ * selection or folder, as from the Command Palette. One entry is a
+ * checkbox: *Without context* switches the `swh.swhidWithoutContext`
+ * setting, which makes the SWHID commands give bare SWHIDs.
+ *
+ * To add a command to the menu, add an {@link Entry} to {@link MENU}.
+ *
+ * @packageDocumentation
+ */
 
 import * as vscode from 'vscode';
-import { config } from './ui';
+import { config } from './helpers';
 
+/** An entry of the menu: a group, a command, or the *Without context* switch. */
 interface Entry {
+  /** The text shown. */
   label: string;
+  /** Shown after the label, dimmed. */
   description?: string;
+  /** The name of the codicon shown before the label, e.g. `copy`. */
   icon?: string;
+  /** The id of the command the entry runs. */
   command?: string;
-  /** The "without context" switch. */
+  /** Whether the entry is the "without context" switch, shown as a checkbox. */
   toggle?: boolean;
+  /** The entries of a group; a group is shown expanded. */
   children?: Entry[];
 }
 
+/** The menu: its groups, and their entries in order. */
 const MENU: Entry[] = [
   {
     label: 'SWH Archive',
@@ -55,11 +75,23 @@ const MENU: Entry[] = [
   },
 ];
 
+/**
+ * The data provider of the Menu view.
+ *
+ * @remarks
+ * The *Without context* checkbox writes the `swh.swhidWithoutContext`
+ * setting in the user's global settings. The view also redraws when that
+ * setting changes elsewhere, so the checkbox always reflects it.
+ */
 export class MenuView implements vscode.TreeDataProvider<Entry>, vscode.Disposable {
+  /** Fires when the menu must be redrawn: the switch's setting changed. */
   private emitter = new vscode.EventEmitter<Entry | undefined>();
+  /** The event VS Code listens to, to redraw the menu. */
   readonly onDidChangeTreeData = this.emitter.event;
+  /** The view and the event listeners, disposed of with the provider. */
   private disposables: vscode.Disposable[] = [];
 
+  /** Create the Menu view, and follow its checkbox and the setting it switches. */
   constructor() {
     const view = vscode.window.createTreeView('swh.actions', { treeDataProvider: this });
     this.disposables.push(
@@ -81,14 +113,33 @@ export class MenuView implements vscode.TreeDataProvider<Entry>, vscode.Disposab
     );
   }
 
+  /** Dispose of the view and its listeners. */
   dispose() {
     for (const d of this.disposables) d.dispose();
   }
 
+  /**
+   * The children of an entry, for VS Code.
+   *
+   * @param entry - The entry whose children to give; undefined for the top level.
+   * @returns The entries of a group, nothing for a command, or the groups at the top level.
+   */
   getChildren(entry?: Entry): Entry[] {
     return entry ? entry.children ?? [] : MENU;
   }
 
+  /**
+   * How VS Code shows an entry.
+   *
+   * @remarks
+   * Groups are shown expanded. A command entry runs its command when
+   * clicked. The switch is shown as a checkbox, checked when
+   * `swh.swhidWithoutContext` is on, and its description tells which SWHIDs
+   * the commands give.
+   *
+   * @param entry - The entry to show.
+   * @returns The tree item for `entry`.
+   */
   getTreeItem(entry: Entry): vscode.TreeItem {
     const item = new vscode.TreeItem(
       entry.label,

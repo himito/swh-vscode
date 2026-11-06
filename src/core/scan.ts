@@ -1,35 +1,85 @@
-// The scan report as a tree: pure functions over the backend's nodes.
+/**
+ * The scan of a repository as a tree, and its figures.
+ *
+ * @remarks
+ * The backend's scan gives a flat list of {@link TreeNode}s; this module
+ * turns it into the tree the Scan view shows, and counts what is archived.
+ * Its functions are pure, and it must not import `vscode`.
+ *
+ * @packageDocumentation
+ */
 
 import type { TreeNode } from './backend';
 import { ancestors } from './swhid';
 
+/**
+ * The archival status of a scanned item.
+ *
+ * @remarks
+ * `'partial'` applies to directories only: not archived as a whole, but
+ * some files under them are.
+ */
 export type ScanStatus = 'archived' | 'partial' | 'not-archived';
 
+/** A file or directory of the scanned tree. */
 export interface ScanItem {
+  /** The path relative to the repository root, with `/` separators; `"."` for the root. */
   path: string;
+  /** The name to show: the last path segment, with a trailing `/` for a directory; `"./"` for the root. */
   name: string;
+  /** The core SWHID of the item as it is in the working tree. */
   swhid: string;
+  /** Whether the item is a directory. */
   dir: boolean;
+  /** The item's archival status. */
   status: ScanStatus;
-  /** For a directory: [files, archived files] under it. */
+  /** For a directory: `[files, archived files]` under it, at any depth. */
   counts?: [number, number];
+  /** The directory holding the item; none for the root. */
   parent?: ScanItem;
+  /** The items in the directory, in path order; empty for a file. */
   children: ScanItem[];
 }
 
+/** A scanned repository: its tree and its figures. */
 export interface Scan {
+  /** The root directory, `"."`. */
   root: ScanItem;
+  /** Every item, the root first, in path order. */
   items: ScanItem[];
+  /** The number of files. */
   files: number;
+  /** The number of archived files. */
   archivedFiles: number;
+  /** The number of directories, the root included. */
   dirs: number;
+  /** The number of directories archived as a whole. */
   archivedDirs: number;
+  /** The number of directories partially archived. */
   partialDirs: number;
 }
 
+/**
+ * Gives a proportion in percent, rounded down.
+ *
+ * @param k - The part.
+ * @param n - The whole.
+ * @returns `k` out of `n`, in percent; 0 when `n` is 0.
+ */
 export const percent = (k: number, n: number) => (n === 0 ? 0 : Math.floor((100 * k) / n));
 
-/** Compare paths component by component, "." first. */
+/**
+ * Compares two relative paths component by component, for sorting.
+ *
+ * @remarks
+ * Comparing whole strings would put `a-b` between `a` and `a/c`; comparing
+ * components keeps every directory's content right after it.
+ *
+ * @param a - A relative path, `"."` for the root.
+ * @param b - Another one.
+ * @returns A negative number when `a` comes first, positive when `b` does,
+ * 0 when they are equal; the root `"."` comes first.
+ */
 function comparePaths(a: string, b: string): number {
   if (a === b) return 0;
   if (a === '.') return -1;
@@ -42,7 +92,17 @@ function comparePaths(a: string, b: string): number {
   return x.length - y.length;
 }
 
-/** The scan of NODES, as a tree whose root is ".". */
+/**
+ * Builds the tree of a scan, with its figures.
+ *
+ * @remarks
+ * A directory that is not archived as a whole is `'partial'` when at least
+ * one file under it is archived.
+ *
+ * @param nodes - The nodes of the tracked working tree, in any order, as
+ * {@link Swh.tree} gives them.
+ * @returns The scan, whose root is `"."`.
+ */
 export function buildScan(nodes: TreeNode[]): Scan {
   const sorted = [...nodes].sort((a, b) => comparePaths(a.path, b.path));
   // directory path -> [files, archived] of the files under it
@@ -88,7 +148,12 @@ export function buildScan(nodes: TreeNode[]): Scan {
   };
 }
 
-/** The scan's figures, in words. */
+/**
+ * Describes the figures of a scan in words, for the Scan view's header.
+ *
+ * @param s - The scan.
+ * @returns E.g. `"Files: 3, archived 1 (33%)   Directories: 3, archived 1 (33%), partially 1 (33%)"`.
+ */
 export function scanSummary(s: Scan): string {
   return (
     `Files: ${s.files}, archived ${s.archivedFiles} (${percent(s.archivedFiles, s.files)}%)   ` +

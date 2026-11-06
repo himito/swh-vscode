@@ -1,52 +1,113 @@
-// The commands.
+/**
+ * The extension's user-facing commands: archival status, visits, save
+ * requests, SWHIDs, citations and the Quick Pick menu.
+ *
+ * @remarks
+ * Each public method of {@link Commands} implements one or more commands
+ * registered in `extension.ts`. They work on "where the user is": the file
+ * in the active editor (and its selected lines), a file or folder given by a
+ * context menu, or else the current folder (see {@link Commands.target}).
+ * They talk to the archive through {@link Swh}, show their results with the
+ * helpers of `helpers.ts`, and report problems by throwing {@link UserError}.
+ *
+ * @packageDocumentation
+ */
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { OriginInfo, Swh, SwhidInfo } from './backend';
-import { bibtex, citationWhat, originBibtex } from './citation';
-import { Cancelled, UserError } from './http';
-import type { Reports } from './reports';
 import {
+  bibtex,
   browseUrl,
+  Cancelled,
+  citationWhat,
   core,
   formatDate,
   isPublicOrigin,
   normalizeOrigin,
+  originBibtex,
+  type OriginInfo,
   shortHash,
-} from './swhid';
-import { ask, busy, config, currentDir, fileEditor, info, openUrl, realpath, selectionLines } from './ui';
+  type Swh,
+  type SwhidInfo,
+  UserError,
+} from '../core';
+import type { Reports } from './reports';
+import { ask, busy, config, currentDir, fileEditor, info, openUrl, realpath, selectionLines } from './helpers';
 
+/**
+ * What a SWHID command produces.
+ *
+ * @remarks
+ * - `swhid`: the SWHID, qualified or bare.
+ * - `link`: the archive's permalink to it.
+ * - `open`: opens it in the archive; copies the SWHID when not archived.
+ * - `bibtex`: a BibTeX entry citing it.
+ * - `archived`: the SWHID of the version the archive holds.
+ * - `markdown`: a Markdown link to it, `[file, lines A-B](permalink)`.
+ */
 export type What = 'swhid' | 'link' | 'open' | 'bibtex' | 'archived' | 'markdown';
 
-/** What a SWHID command gets: a Uri from a menu, or options from a keybinding or the menu. */
+/**
+ * The argument a SWHID command receives.
+ *
+ * @remarks
+ * A `Uri` when run from the editor's or the Explorer's context menu; options
+ * when run from a keybinding (`"args": { "bare": true }`), the menus, or the
+ * status bar item (`path`); `undefined` from the Command Palette.
+ */
 export type CommandArg = vscode.Uri | { bare?: boolean; path?: string } | undefined;
 
+/** What a SWHID command is about: a file, possibly some of its lines, or a directory. */
 export interface Target {
+  /** The real path of the file or directory. */
   path: string;
+  /** The selected lines, `"A-B"` or `"A"`, for a file in the active editor. */
   lines?: string;
 }
 
+/** Implements the extension's commands. */
 export class Commands {
+  /**
+   * Creates the commands.
+   *
+   * @param swh - The backend that talks to Git, swhd and the archive.
+   * @param reports - Where the visits and citation reports are shown.
+   * @param onArchiveChange - Called after a save request or a refresh, when
+   * what the archive holds may have changed, e.g. to recheck the status bar.
+   */
   constructor(
     private swh: Swh,
     private reports: Reports,
     private onArchiveChange: () => void,
   ) {}
 
+  /** The archive's web root, from the `swh.archiveUrl` setting. */
   private get archiveUrl() {
     return config().get<string>('archiveUrl', 'https://archive.softwareheritage.org');
   }
 
   // ------------------------------------------------------------ where we are
 
-  /** Root of the Git repository of the current directory, or a UserError. */
+  /**
+   * The root of the Git repository of the current directory.
+   *
+   * @returns The repository's root.
+   * @throws {@link UserError} when no file or folder is open, or the current
+   * directory is not inside a Git repository.
+   */
   async repoRoot(): Promise<string> {
     const root = await this.swh.git.root(await realpath(currentDir()));
     if (!root) throw new UserError('Not inside a Git repository');
     return root;
   }
 
-  /** Public origin of the current directory's repository, undefined without one. */
+  /**
+   * The public origin of the current directory's repository.
+   *
+   * @returns The origin, normalized as the archive names it, or `undefined`
+   * when there is no repository, no remote, or the remote is not a public
+   * URL.
+   */
   async localOrigin(): Promise<string | undefined> {
     let dir: string;
     try {
@@ -59,7 +120,21 @@ export class Commands {
     return isPublicOrigin(origin) ? origin : undefined;
   }
 
-  /** Ask with PROMPT for the URL of a public repository, DEFAULT proposed. */
+  /**
+   * Asks the user for the URL of a public repository.
+   *
+   * @remarks
+   * A URL without a scheme, like `github.com/owner/repo`, gets `https://`.
+   * The URL is normalized as the archive names origins (see
+   * {@link normalizeOrigin}).
+   *
+   * @param prompt - The prompt of the input box.
+   * @param def - The URL proposed in the input box.
+   * @returns The normalized origin.
+   * @throws {@link Cancelled} when the user dismisses the input box.
+   * @throws {@link UserError} when the input is empty, looks like a web page
+   * rather than a repository, or is not a public URL.
+   */
   async readOrigin(prompt: string, def?: string): Promise<string> {
     const input = await vscode.window.showInputBox({
       prompt,
@@ -77,14 +152,40 @@ export class Commands {
     return origin;
   }
 
-  /** The origin of a command that can VERB another origin: asked when FORCE, or without a public origin here. */
+  /**
+   * The origin a command about "another repository" works on.
+   *
+   * @remarks
+   * Asks for a repository URL when `force` is set, or when the current
+   * repository has no public origin; the current origin, if any, is proposed.
+   *
+   * @param verb - What the command does to the origin, for the prompt, e.g. "check".
+   * @param force - Whether to ask even when there is a public origin here.
+   * @returns The origin asked for, or `undefined` to use the current repository.
+   * @throws {@link Cancelled} when the user dismisses the input box.
+   * @throws {@link UserError} when the URL entered is not valid, see {@link Commands.readOrigin}.
+   */
   async originArg(verb: string, force: boolean): Promise<string | undefined> {
     const local = await this.localOrigin();
     if (!force && local) return undefined;
     return this.readOrigin(local ? `Origin to ${verb}` : `No public origin here; origin to ${verb}`, local);
   }
 
-  /** The file (and selected lines) or directory a SWHID command is about. */
+  /**
+   * The file (with its selected lines) or directory a SWHID command is about.
+   *
+   * @remarks
+   * In order: the file or folder `arg` names, when it is not the active
+   * editor's file; else the active editor's file, with its selected lines,
+   * offering to save it first when modified; else the current directory.
+   * Symbolic links are resolved.
+   *
+   * @param arg - A file or folder from a context menu or the status bar, if any.
+   * @returns The target.
+   * @throws {@link UserError} when `arg` is not a local file, the path does not
+   * exist, the user declines to save a modified file, or the current
+   * directory is not inside a Git repository.
+   */
   async target(arg?: vscode.Uri | string): Promise<Target> {
     const editor = fileEditor();
     const uri = typeof arg === 'string' ? vscode.Uri.file(arg) : arg;
@@ -109,12 +210,23 @@ export class Commands {
     return { path: dir };
   }
 
-  /** Whether a SWHID command goes without context. */
+  /**
+   * Whether a SWHID command gives the bare SWHID, without its context.
+   *
+   * @param arg - The command's argument; its `bare` option wins.
+   * @returns The `bare` option when given, else the `swh.swhidWithoutContext` setting.
+   */
   private bare(arg: CommandArg): boolean {
     if (arg && !(arg instanceof vscode.Uri) && typeof arg.bare === 'boolean') return arg.bare;
     return config().get<boolean>('swhidWithoutContext', false);
   }
 
+  /**
+   * The file or folder a command's argument names, if any.
+   *
+   * @param arg - The command's argument.
+   * @returns The `Uri` from a context menu, the `path` option, or `undefined`.
+   */
   private uriOf(arg: CommandArg): vscode.Uri | string | undefined {
     if (arg instanceof vscode.Uri) return arg;
     return arg?.path;
@@ -122,6 +234,13 @@ export class Commands {
 
   // ------------------------------------------------------------ status, visits, save
 
+  /**
+   * Describes an origin's archival status in words.
+   *
+   * @param info - The origin's archival status.
+   * @returns The description, and whether a save request would help: the
+   * origin is not archived, or its upstream commit is not yet.
+   */
   statusText(info: OriginInfo): [string, boolean] {
     const date = info.date ? formatDate(info.date) : 'unknown';
     if (!info.archived) return [`${info.origin} is not archived`, true];
@@ -131,7 +250,13 @@ export class Commands {
     return [`${info.origin} is archived${info.upstream ? ', upstream included' : ''} (last visit ${date})`, false];
   }
 
-  /** Report INFO, of an origin ASKED for or of the repository; offer to save it when it would help. */
+  /**
+   * Reports an origin's archival status, offering a save request when it would help.
+   *
+   * @param origin - The archival status to report.
+   * @param asked - The origin the user asked about, or `undefined` for the
+   * current repository; it decides what a save request is for.
+   */
   async reportStatus(origin: OriginInfo, asked?: string): Promise<void> {
     const [text, unsaved] = this.statusText(origin);
     if (unsaved) {
@@ -143,6 +268,18 @@ export class Commands {
     }
   }
 
+  /**
+   * Tells whether the repository is archived, and its upstream commit too.
+   *
+   * @remarks
+   * Implements `swh.status` and, with `force`, `swh.statusOther`.
+   *
+   * @param force - Whether to ask for another repository's URL.
+   * @defaultValue `force` is `false`.
+   * @throws {@link Cancelled} when the user dismisses the prompt.
+   * @throws {@link UserError} when there is no repository or remote, or the
+   * archive cannot be reached or refuses the request.
+   */
   async status(force = false): Promise<void> {
     const origin = await this.originArg('check', force);
     const result = await busy('Software Heritage: checking the archival status…', async () =>
@@ -151,6 +288,13 @@ export class Commands {
     await this.reportStatus(result, origin);
   }
 
+  /**
+   * The visits report's text: one line per visit, with its date, status and snapshot.
+   *
+   * @param origin - The origin visited.
+   * @param visits - Its visits, most recent first, as the archive lists them.
+   * @returns The report, its snapshots as full SWHIDs so that they become links.
+   */
   visitsText(origin: string, visits: Array<{ date: string; status: string; snapshot?: string }>): string {
     return (
       `Last ${visits.length} archival visits of ${origin}\n\n` +
@@ -160,6 +304,19 @@ export class Commands {
     );
   }
 
+  /**
+   * Lists the last archival visits of the repository's origin in a report.
+   *
+   * @remarks
+   * Implements `swh.visits` and, with `force`, `swh.visitsOther`. When the
+   * origin is not archived, says so instead of showing an empty report.
+   *
+   * @param force - Whether to ask for another repository's URL.
+   * @defaultValue `force` is `false`.
+   * @throws {@link Cancelled} when the user dismisses the prompt.
+   * @throws {@link UserError} when there is no repository or remote, or the
+   * archive cannot be reached or refuses the request.
+   */
   async visits(force = false): Promise<void> {
     const origin = await this.originArg('list the visits of', force);
     const r = await busy('Software Heritage: listing the visits…', async () =>
@@ -172,11 +329,34 @@ export class Commands {
     await this.reports.show('swh visits.txt', this.visitsText(r.origin, r.visits));
   }
 
+  /**
+   * Asks Software Heritage to archive the repository now.
+   *
+   * @remarks
+   * Implements `swh.save` and, with `force`, `swh.saveOther`.
+   *
+   * @param force - Whether to ask for another repository's URL.
+   * @defaultValue `force` is `false`.
+   * @throws {@link Cancelled} when the user dismisses the prompt.
+   * @throws {@link UserError} as {@link Commands.doSave} does.
+   */
   async save(force = false): Promise<void> {
     await this.doSave(await this.originArg('save', force));
   }
 
-  /** Ask to save ORIGIN, or the current repository. */
+  /**
+   * Sends a save request and tells its answer.
+   *
+   * @remarks
+   * A request is accepted at once, or waits for review by Software Heritage;
+   * a refused request is an HTTP error. Either way, what the archive holds
+   * may change, so {@link Commands.onArchiveChange} is called.
+   *
+   * @param origin - The public origin to save, or `undefined` for the current repository.
+   * @throws {@link UserError} when there is no repository or remote, the
+   * origin is not a public URL, or the archive cannot be reached or refuses
+   * the request.
+   */
   async doSave(origin?: string): Promise<void> {
     const request = await busy(`Software Heritage: sending the save request for ${origin ?? 'this repository'}…`, async () =>
       origin ? this.swh.saveOrigin(origin) : this.swh.save(await this.repoRoot()),
@@ -196,6 +376,14 @@ export class Commands {
     }
   }
 
+  /**
+   * Forgets what may have changed in the archive, and checks the status bar again.
+   *
+   * @remarks
+   * Implements `swh.refresh`. What the archive holds stays remembered; the
+   * negative answers and the origins' statuses are forgotten, in swhd too
+   * when it runs. The message says when swhd could not forget.
+   */
   async refresh(): Promise<void> {
     const why = await this.swh.refresh();
     this.onArchiveChange();
@@ -204,7 +392,16 @@ export class Commands {
 
   // ------------------------------------------------------------ SWHIDs
 
-  /** [TEXT, LABEL]: WHAT of INFO, for PATH or its LINES; LABEL says what TEXT is. */
+  /**
+   * The text a SWHID command produces, and a label saying what it is.
+   *
+   * @param info - The SWHID of the target, as the backend computed it.
+   * @param lines - The lines to qualify the SWHID with, if any.
+   * @param what - What to produce.
+   * @param bare - Whether to use the bare SWHID rather than the qualified one.
+   * @param p - The target's path, for the Markdown link's text and the citation's repository.
+   * @returns The text, and its label for the messages, e.g. "qualified SWHID".
+   */
   private async swhidText(info: SwhidInfo, lines: string | undefined, what: What, bare: boolean, p: string): Promise<[string, string]> {
     if (what === 'bibtex') {
       const [entry, why] = await bibtex(this.swh, info, lines, await this.swh.git.root(p));
@@ -230,7 +427,23 @@ export class Commands {
     return [swhid, label];
   }
 
-  /** Copy WHAT of the current file, selection or directory; return it. */
+  /**
+   * Copies the SWHID, link, citation or Markdown link of the current file,
+   * selection or directory, or opens it in the archive.
+   *
+   * @remarks
+   * Implements the `swh.swhid*` commands. The message tells what was copied
+   * and, when the archive does not hold it, why; when nothing explains it,
+   * it offers a save request. With `open`, a target the archive does not
+   * hold is copied instead of opened. For `archived`, the selected lines are
+   * dropped when the archived version differs from the working tree's.
+   *
+   * @param what - What to produce.
+   * @param arg - The command's argument: the target, or the `bare` option.
+   * @returns The text copied or opened.
+   * @throws {@link UserError} when there is no target, it is not a local file,
+   * the user declines to save a modified file, or Git fails.
+   */
   async swhidCopy(what: What, arg?: CommandArg): Promise<string> {
     const bare = this.bare(arg);
     const t = await this.target(this.uriOf(arg));
@@ -258,7 +471,18 @@ export class Commands {
     return text;
   }
 
-  /** Say why the archive does not hold PATH, WHAT of which was just copied; or offer to save ORIGIN. */
+  /**
+   * Says why the archive does not hold a target just copied, or offers to save its origin.
+   *
+   * @remarks
+   * Reasons are e.g. uncommitted changes or an unpushed commit. When there is
+   * none and the origin is public, the archive has simply not visited it
+   * since the last push: a save request is offered.
+   *
+   * @param what - The label of what was copied, for the message.
+   * @param p - The target's path.
+   * @param origin - The target's origin, if any.
+   */
   private async swhidUnarchived(what: string, p: string, origin?: string): Promise<void> {
     const why = await this.swh.unarchivedWhy(p);
     if (why) {
@@ -275,6 +499,24 @@ export class Commands {
 
   // ------------------------------------------------------------ citations
 
+  /**
+   * Copies a BibTeX entry citing the current file, selection or directory,
+   * or a repository, and shows it in a report.
+   *
+   * @remarks
+   * Implements `swh.cite` and, with `force`, `swh.citeOther`. The archive
+   * makes the entry from the repository's `codemeta.json` or `CITATION.cff`;
+   * without them, or when the target is not archived, a minimal entry is
+   * made. With no file or folder to cite, asks for a repository and cites
+   * its latest snapshot.
+   *
+   * @param force - Whether to ask for another repository's URL.
+   * @param arg - The command's argument: the file or folder to cite, if any.
+   * @defaultValue `force` is `false`.
+   * @throws {@link Cancelled} when the user dismisses the prompt.
+   * @throws {@link UserError} when there is nothing to cite, the repository
+   * asked for is not archived, or the archive cannot be reached.
+   */
   async cite(force = false, arg?: CommandArg): Promise<void> {
     const origin = force || (!fileEditor() && !this.uriOf(arg)) ? await this.originArg('cite', force) : undefined;
     let entry: string;
@@ -291,6 +533,15 @@ export class Commands {
 
   // ------------------------------------------------------------ misc
 
+  /**
+   * Opens a SWHID in the archive's web interface.
+   *
+   * @remarks
+   * Implements `swh.openSwhid`, also the target of the links on SWHIDs.
+   * Without a SWHID, asks for one; dismissing the input box does nothing.
+   *
+   * @param swhid - The SWHID to open, with or without qualifiers.
+   */
   async openSwhid(swhid?: string): Promise<void> {
     if (!swhid) {
       swhid = (
@@ -305,9 +556,17 @@ export class Commands {
     await openUrl(browseUrl(this.archiveUrl, swhid));
   }
 
-  /** A menu of the main commands, with the "without context" switch. */
+  /**
+   * Shows a Quick Pick menu of the main commands, and runs the one picked.
+   *
+   * @remarks
+   * Implements `swh.menu`. The "Without context" item toggles, for this use
+   * of the menu only, whether the SWHID commands give bare SWHIDs; it starts
+   * from the `swh.swhidWithoutContext` setting.
+   */
   async menu(): Promise<void> {
     let bare = config().get<boolean>('swhidWithoutContext', false);
+    // cmd: the command to run; swhid: whether it takes the bare option; toggle: the switch
     type Item = vscode.QuickPickItem & { cmd?: string; swhid?: boolean; toggle?: boolean };
     const sep = (label: string): Item => ({ label, kind: vscode.QuickPickItemKind.Separator });
     for (;;) {

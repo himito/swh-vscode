@@ -119,18 +119,29 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   └── swh-logo-128.png The extension's icon
 ├── src/
 │   ├── extension.ts     Activation: wires everything and registers the commands
-│   ├── commands.ts      The commands: status, visits, save, SWHIDs, citations, menu
-│   ├── backend.ts       The backend: the swhd daemon, else Git and the archive's Web API
-│   ├── git.ts           Running git, and the temporary index copies
-│   ├── http.ts          HTTP requests, and the error types
-│   ├── swhid.ts         SWHIDs, origins and their encodings (pure functions)
-│   ├── citation.ts      BibTeX entries
-│   ├── scanModel.ts     The scan as a tree, and its figures (pure functions)
-│   ├── scanView.ts      The Scan view
-│   ├── menuView.ts      The Menu view
-│   ├── statusBar.ts     The archival status in the status bar
-│   ├── reports.ts       The read-only reports (visits, citations) and the SWHID links
-│   └── ui.ts            Shared helpers: messages, progress, the current file or folder
+│   ├── core/            Plain TypeScript, no `vscode` import
+│   │   ├── index.ts     The folder's public API, re-exported
+│   │   ├── backend/     The backend, class Swh: the swhd daemon, else Git and the archive's Web API
+│   │   │   ├── index.ts     Swh itself: scans, refresh, why a file is not archived
+│   │   │   ├── swhids.ts    SWHIDs of files and directories, anchored on archived commits
+│   │   │   ├── origins.ts   Origins, visits, save requests
+│   │   │   ├── known.ts     Which SWHIDs the archive holds
+│   │   │   ├── client.ts    Requests to the archive and to swhd, the rate limit
+│   │   │   ├── memo.ts      Remembered answers
+│   │   │   └── types.ts     The data it answers with, and what it needs from its host
+│   │   ├── git.ts       Running git, and the temporary index copies
+│   │   ├── http.ts      HTTP requests, and the error types
+│   │   ├── swhid.ts     SWHIDs, origins and their encodings (pure functions)
+│   │   ├── citation.ts  BibTeX entries
+│   │   └── scan.ts      The scan as a tree, and its figures (pure functions)
+│   └── ui/              VS Code's side: everything here imports `vscode`
+│       ├── index.ts     The folder's public API, re-exported
+│       ├── commands.ts  The commands: status, visits, save, SWHIDs, citations, menu
+│       ├── menuView.ts  The Menu view
+│       ├── scanView.ts  The Scan view
+│       ├── statusBar.ts The archival status in the status bar
+│       ├── reports.ts   The read-only reports (visits, citations) and the SWHID links
+│       └── helpers.ts   Shared helpers: messages, progress, the current file or folder
 └── test/
     ├── swhid.test.ts    Unit tests: SWHIDs, origins, citations, the scan model
     ├── backend.test.ts  Unit tests: the backend on a temporary repository, the archive mocked
@@ -141,7 +152,9 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 
 `npm test` runs only the `*.test.ts` files, with Node: the smoke test needs VS Code's extension host.
 
-Only the modules that import `vscode` need VS Code: [extension.ts](src/extension.ts), [commands.ts](src/commands.ts), the views, [statusBar.ts](src/statusBar.ts), [reports.ts](src/reports.ts) and [ui.ts](src/ui.ts). The others are plain TypeScript, which is why the unit tests can run them with Node alone.
+Only [extension.ts](src/extension.ts) and the modules in [src/ui/](src/ui/) import `vscode`. The modules in [src/core/](src/core/) are plain TypeScript, which is why the unit tests can run them with Node alone: code that works without VS Code goes in `core/`, its VS Code side in `ui/`.
+
+Between folders, modules import a folder's `index.ts` (`from '../core'`); within a folder, they import each other directly. `Swh` is built in layers, each file's class extending the one below it: `client` → `known` → `origins` → `swhids` → `Swh`.
 
 ## License
 

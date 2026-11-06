@@ -1,13 +1,30 @@
-// In the extension host: the commands on a repository without a remote,
-// where nothing needs the archive.
+/**
+ * The smoke test suite, run inside VS Code's extension host by `run.ts`.
+ *
+ * @remarks
+ * It runs the extension's commands for real, on a repository without a
+ * remote, where nothing needs the archive, and checks what they copy to the
+ * clipboard and show. Run it with `npm run smoke`.
+ *
+ * @packageDocumentation
+ */
+
 import * as assert from 'assert';
 import { execFileSync } from 'child_process';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+/**
+ * Run the suite; the test fails when this rejects.
+ *
+ * @remarks
+ * `@vscode/test-electron` calls it once the workspace, the temporary
+ * repository, is open.
+ */
 export async function run() {
   const ext = vscode.extensions.all.find((e) => e.packageJSON.name === 'swh-vscode')!;
   await ext.activate();
+  // every command the manifest declares is registered
   const all = await vscode.commands.getCommands(true);
   for (const c of ext.packageJSON.contributes.commands) assert.ok(all.includes(c.command), c.command);
 
