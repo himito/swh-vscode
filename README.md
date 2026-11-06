@@ -9,7 +9,7 @@ This project is inspired by [swh.el](https://github.com/bzg/swh.el), the Softwar
 The activity bar has a Software Heritage icon (the SWH logo). It opens two views:
 
 - **Menu**: the commands below, in groups. Click one to run it on the current file, selection or folder. The *Without context* checkbox switches `swh.swhidWithoutContext` on or off.
-- **Scan**: the scan of the repository, see [Scan view](#scan-view).
+- **Scan**: the scan of the repository (see [Scan view](#scan-view)).
 
 ## Commands
 
@@ -60,7 +60,7 @@ The status is checked when you switch to a file and each time you save it. Click
 
 ### Scan view
 
-**Scan** fills the *Scan* view of the Software Heritage side bar with the tracked working tree. Each file and directory is marked as archived, partially archived or not archived, and each directory shows how many of its files are archived. Archived directories start folded. Its context menu can:
+**Scan** fills the *Scan* view of the Software Heritage side bar with the tracked working tree. Each file and directory is marked as archived, partially archived or not archived, and each directory shows how many of its files are archived. Archived directories start folded. Each item's context menu lets you:
 
 - open the item in the archive
 - copy its SWHID
@@ -69,7 +69,7 @@ The status is checked when you switch to a file and each time you save it. Click
 
 SWHIDs in any document become clickable links that open in the archive. This includes the *Visits* and *Cite* reports. Turn it off with `swh.documentLinks.enabled`.
 
-## Token or not token
+## Token or no token
 
 Without a token, the archive allows 120 requests per hour. With a token [from your archive account](https://archive.softwareheritage.org/api/#authentication), it allows 1200.
 
@@ -77,7 +77,7 @@ Either set the `SWH_API_TOKEN` environment variable (swhd reads it too), or run 
 
 ## The swhd daemon
 
-You can also run the local [swhd](https://github.com/bzg/swhd) daemon (0.8.0 or later). It caches SWHIDs. Whenever it answers at `swh.daemonUrl`, the extension goes through it, which saves on the API's rate limit. The scan view's header says which backend was used.
+You can also run the local [swhd](https://github.com/bzg/swhd) daemon (0.8.0 or later). It caches SWHIDs. Whenever it answers at `swh.daemonUrl`, the extension goes through it, which saves requests against the API's rate limit. The Scan view's header says which backend was used.
 
 ```shell
 bbin install io.github.bzg/swhd
@@ -88,7 +88,7 @@ bbin install io.github.bzg/swhd
 | Setting | Default | |
 |---|---|---|
 | `swh.archiveUrl` | `https://archive.softwareheritage.org` | The archive's web root. SWHIDs resolve there, and its Web API is at `/api/1` |
-| `swh.daemonUrl` | `http://127.0.0.1:8642` | swhd's URL. Empty: never use it |
+| `swh.daemonUrl` | `http://127.0.0.1:8642` | swhd's URL. Leave it empty to never use swhd |
 | `swh.swhidWithoutContext` | `false` | SWHID commands give bare SWHIDs |
 | `swh.statusBar.enabled` | `true` | Show the archival status in the status bar |
 | `swh.statusBar.lighters` | `SWH✓` … | The status bar texts, by status |
@@ -97,7 +97,7 @@ bbin install io.github.bzg/swhd
 
 ## Requirements
 
-You need VS Code 1.90 or later and `git`. Only local files are supported: Remote and virtual workspaces are not. SWHIDs are SHA-1 based, so repositories that use SHA-256 are not supported either.
+You need VS Code 1.90 or later and `git`. Only local files are supported: remote and virtual workspaces are not. SWHIDs are SHA-1-based, so repositories that use SHA-256 are not supported either.
 
 ## Development
 
@@ -121,7 +121,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   ├── extension.ts     Activation: wires everything and registers the commands
 │   ├── core/            Plain TypeScript, no `vscode` import
 │   │   ├── index.ts     The folder's public API, re-exported
-│   │   ├── backend/     The backend, class Swh: the swhd daemon, else Git and the archive's Web API
+│   │   ├── backend/     The backend (class Swh): the swhd daemon, or else Git and the archive's Web API
 │   │   │   ├── index.ts     Swh itself: scans, refresh, why a file is not archived
 │   │   │   ├── swhids.ts    SWHIDs of files and directories, anchored on archived commits
 │   │   │   ├── origins.ts   Origins, visits, save requests
@@ -129,7 +129,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   │   │   ├── client.ts    Requests to the archive and to swhd, the rate limit
 │   │   │   ├── memo.ts      Remembered answers
 │   │   │   └── types.ts     The data it answers with, and what it needs from its host
-│   │   ├── git.ts       Running git, and the temporary index copies
+│   │   ├── git.ts       Running Git, and the temporary index copies
 │   │   ├── http.ts      HTTP requests, and the error types
 │   │   ├── swhid.ts     SWHIDs, origins and their encodings (pure functions)
 │   │   ├── citation.ts  BibTeX entries
@@ -152,7 +152,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 
 `npm test` runs only the `*.test.ts` files, with Node: the smoke test needs VS Code's extension host.
 
-Only [extension.ts](src/extension.ts) and the modules in [src/ui/](src/ui/) import `vscode`. The modules in [src/core/](src/core/) are plain TypeScript, which is why the unit tests can run them with Node alone: code that works without VS Code goes in `core/`, its VS Code side in `ui/`.
+Only [extension.ts](src/extension.ts) and the modules in [src/ui/](src/ui/) import `vscode`. The modules in [src/core/](src/core/) are plain TypeScript, which is why the unit tests can run them with Node alone. Code that works without VS Code goes in `core/`, and the parts that need VS Code go in `ui/`.
 
 Between folders, modules import a folder's `index.ts` (`from '../core'`); within a folder, they import each other directly. `Swh` is built in layers, each file's class extending the one below it: `client` → `known` → `origins` → `swhids` → `Swh`.
 
