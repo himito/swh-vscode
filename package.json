@@ -5,6 +5,14 @@
   "version": "0.1.0",
   "publisher": "swh-vscode",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/himito/swh-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/himito/swh-vscode/issues"
+  },
+  "homepage": "https://github.com/himito/swh-vscode#readme",
   "engines": {
     "vscode": "^1.90.0"
   },

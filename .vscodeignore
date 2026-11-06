@@ -5,3 +5,5 @@ out/test/**
 tsconfig.json
 .gitignore
 .vscode-test/**
+.github/**
+.vscode/**
