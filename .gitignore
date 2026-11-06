@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output (npm run compile)
+out/
+*.tsbuildinfo
+
+# Packaged extension (vsce package)
+*.vsix
+
+# VS Code downloaded by the smoke test (npm run smoke)
+.vscode-test/
+
+# Editor settings: keep only the shared launch configuration
+.vscode/*
+!.vscode/launch.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Secrets: never commit an API token
+.env
+.env.*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,359 @@
+{
+  "name": "swh-vscode",
+  "displayName": "Software Heritage",
+  "description": "Software Heritage client: archive your code, cite it with a SWHID, and see which of your files are already archived.",
+  "version": "0.1.0",
+  "publisher": "swh-vscode",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "software heritage",
+    "swhid",
+    "archive",
+    "citation",
+    "bibtex"
+  ],
+  "main": "./out/src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "swh.menu",
+        "title": "Menu…",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.status",
+        "title": "Status: is the repo archived?",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.statusOther",
+        "title": "Status of another repository…",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.visits",
+        "title": "Visits: list the last visits",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.visitsOther",
+        "title": "Visits of another repository…",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.save",
+        "title": "Save: ask SWH to save code now",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.saveOther",
+        "title": "Save another repository…",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.swhidCopy",
+        "title": "SWHID: copy",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.swhidCopyArchived",
+        "title": "SWHID: copy the archived version",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.swhidCopyLink",
+        "title": "SWHID: copy the archive link",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.swhidCopyMarkdown",
+        "title": "SWHID: copy as a Markdown link",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.swhidOpen",
+        "title": "SWHID: open in the archive",
+        "category": "Software Heritage",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "swh.cite",
+        "title": "Cite: show a BibTeX entry",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.citeOther",
+        "title": "Cite another repository…",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.scan",
+        "title": "Scan: show what is archived",
+        "category": "Software Heritage",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "swh.refresh",
+        "title": "Refresh: forget what may have changed",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.openSwhid",
+        "title": "Open a SWHID in the archive…",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.setToken",
+        "title": "Set API token",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.clearToken",
+        "title": "Clear API token",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.statusBarCopy",
+        "title": "Copy the SWHID of the status bar item",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.scan.openInArchive",
+        "title": "Open in the archive",
+        "category": "Software Heritage",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "swh.scan.copySwhid",
+        "title": "Copy the SWHID",
+        "category": "Software Heritage"
+      },
+      {
+        "command": "swh.scan.openFile",
+        "title": "Open the file",
+        "category": "Software Heritage"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "swh.explorerMenu",
+        "label": "Software Heritage"
+      },
+      {
+        "id": "swh.editorMenu",
+        "label": "Software Heritage"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "swh.statusBarCopy",
+          "when": "false"
+        },
+        {
+          "command": "swh.scan.openInArchive",
+          "when": "false"
+        },
+        {
+          "command": "swh.scan.copySwhid",
+          "when": "false"
+        },
+        {
+          "command": "swh.scan.openFile",
+          "when": "false"
+        }
+      ],
+      "explorer/context": [
+        {
+          "submenu": "swh.explorerMenu",
+          "group": "7_swh"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "swh.editorMenu",
+          "group": "7_swh",
+          "when": "resourceScheme == file"
+        }
+      ],
+      "swh.explorerMenu": [
+        {
+          "command": "swh.swhidCopy",
+          "group": "1_swhid@1"
+        },
+        {
+          "command": "swh.swhidCopyArchived",
+          "group": "1_swhid@2"
+        },
+        {
+          "command": "swh.swhidCopyLink",
+          "group": "1_swhid@3"
+        },
+        {
+          "command": "swh.swhidCopyMarkdown",
+          "group": "1_swhid@4"
+        },
+        {
+          "command": "swh.swhidOpen",
+          "group": "1_swhid@5"
+        },
+        {
+          "command": "swh.cite",
+          "group": "2_more@1"
+        }
+      ],
+      "swh.editorMenu": [
+        {
+          "command": "swh.swhidCopy",
+          "group": "1_swhid@1"
+        },
+        {
+          "command": "swh.swhidCopyArchived",
+          "group": "1_swhid@2"
+        },
+        {
+          "command": "swh.swhidCopyLink",
+          "group": "1_swhid@3"
+        },
+        {
+          "command": "swh.swhidCopyMarkdown",
+          "group": "1_swhid@4"
+        },
+        {
+          "command": "swh.swhidOpen",
+          "group": "1_swhid@5"
+        },
+        {
+          "command": "swh.cite",
+          "group": "2_more@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "swh.scan",
+          "when": "view == swh.scan",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "swh.scan.openInArchive",
+          "when": "view == swh.scan && viewItem =~ /archived/",
+          "group": "inline"
+        },
+        {
+          "command": "swh.scan.openFile",
+          "when": "view == swh.scan && viewItem =~ /file/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "swh.scan.openInArchive",
+          "when": "view == swh.scan && viewItem =~ /archived/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "swh.scan.copySwhid",
+          "when": "view == swh.scan",
+          "group": "2_swhid@1"
+        }
+      ]
+    },
+    "views": {
+      "softwareHeritage": [
+        {
+          "id": "swh.actions",
+          "name": "Menu"
+        },
+        {
+          "id": "swh.scan",
+          "name": "Scan"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "swh.scan",
+        "contents": "Show which files and directories of the repository's tracked working tree the Software Heritage archive holds.\n[Scan the repository](command:swh.scan)"
+      }
+    ],
+    "configuration": {
+      "title": "Software Heritage",
+      "properties": {
+        "swh.archiveUrl": {
+          "type": "string",
+          "default": "https://archive.softwareheritage.org",
+          "markdownDescription": "Web root of the Software Heritage archive, its Web API at `/api/1`. If you use swhd, point it at the same instance."
+        },
+        "swh.daemonUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8642",
+          "markdownDescription": "Base URL of the local [swhd](https://github.com/bzg/swhd) daemon, used when it answers there. Leave it empty to never use it. The API token goes to it with each request, unencrypted, so keep it local."
+        },
+        "swh.swhidWithoutContext": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Make the SWHID commands use the bare SWHID, without context qualifiers. The switch in `Software Heritage: Menu…`, or the `bare` argument of a keybinding, overrides it."
+        },
+        "swh.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show in the status bar whether the current file (or, without one, the workspace folder) is archived."
+        },
+        "swh.statusBar.lighters": {
+          "type": "object",
+          "default": {
+            "archived": "SWH✓",
+            "not-archived": "SWH✗",
+            "origin-archived": "SWH~",
+            "pending": "SWH…",
+            "error": "SWH!"
+          },
+          "markdownDescription": "Status bar texts by archival status. `origin-archived`: the file is not archived, but its origin is."
+        },
+        "swh.documentLinks.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Make the SWHIDs in documents clickable links to the archive."
+        },
+        "swh.gitPath": {
+          "type": "string",
+          "default": "git",
+          "description": "The git executable."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "softwareHeritage",
+          "title": "Software Heritage",
+          "icon": "assets/swh-logo.svg"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "test": "tsc -p . && node --test \"out/test/*.test.js\"",
+    "vscode:prepublish": "npm run compile",
+    "smoke": "tsc -p . && node out/test/smoke/run.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^3.1.0",
+    "typescript": "^5.4.0"
+  },
+  "icon": "assets/swh-logo-128.png"
+}
