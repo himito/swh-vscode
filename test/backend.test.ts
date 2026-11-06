@@ -107,7 +107,6 @@ function swh(token?: string) {
   return new Swh({
     archiveUrl: () => 'https://archive.example.org',
     token: async () => token,
-    warn: () => undefined,
     git: new Git(),
   });
 }
@@ -197,6 +196,11 @@ test('qualified SWHID, anchored and archived', async () => {
   assert.equal(info['origin-archived'], true);
   // the tokenless rate limit is tracked
   assert.equal(s.rateLimitText(), '20/120');
+
+  // unedited: the archived version is the working tree's, its lines hold
+  const same = await s.qualifiedSwhid(path.join(dir, 'a.txt'), '1', true);
+  assert.equal(same.version, 'swh:1:rev:' + commit);
+  assert.ok(same.swhid.endsWith(';lines=1'));
 
   // edited since: the archived version is that of the commit
   writeFileSync(path.join(dir, 'a.txt'), 'edited\n');

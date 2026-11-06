@@ -147,13 +147,16 @@ export function hexify(str: string, allowed = ''): string {
  */
 export function unhex(str: string): string {
   const bytes: number[] = [];
-  for (let i = 0; i < str.length; i++) {
+  for (let i = 0; i < str.length; ) {
     const m = /^%([0-9a-fA-F]{2})/.exec(str.substring(i, i + 3));
     if (m) {
       bytes.push(parseInt(m[1], 16));
-      i += 2;
+      i += 3;
     } else {
-      bytes.push(...Buffer.from(str[i], 'utf8'));
+      // a whole code point: a lone half of a surrogate pair would not encode
+      const c = String.fromCodePoint(str.codePointAt(i)!);
+      bytes.push(...Buffer.from(c, 'utf8'));
+      i += c.length;
     }
   }
   return Buffer.from(bytes).toString('utf8');

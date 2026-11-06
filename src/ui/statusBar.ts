@@ -260,7 +260,7 @@ export class StatusBar implements vscode.Disposable {
       set('not-archived', await this.swh.contentSwhid(file, root).catch(() => undefined));
       return;
     }
-    const r = await this.swh.fileStatus(file);
+    const r = await this.swh.fileStatus(file, await this.swh.contentSwhid(file, root));
     set(r.archived ? 'archived' : 'not-archived', r.swhid);
     if (!r.archived) {
       const info = await this.swh.originQuiet(root).catch(() => null);

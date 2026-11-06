@@ -150,12 +150,11 @@ export class Git {
       // git rejects an empty index file: none at all is an empty index;
       // the copy keeps the index's date, against which git tells whether
       // a file's recorded stat can be trusted
-      try {
-        const st = await fs.stat(index);
+      const st = await fs.stat(index).catch(() => undefined);
+      // no index: an empty one; a failed copy must not pass for one
+      if (st) {
         await fs.copyFile(index, tmp);
         await fs.utimes(tmp, st.atime, st.mtime);
-      } catch {
-        // no index
       }
       return await fn({ ...process.env, GIT_INDEX_FILE: tmp });
     } finally {

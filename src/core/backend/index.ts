@@ -117,7 +117,8 @@ export class Swh extends SwhSwhids {
     if (!origin) return 'the repository has no remote';
     if (!isPublicOrigin(origin)) return `the origin ${origin} is not a public URL`;
     if (!(await this.git.get(root, ['--literal-pathspecs', 'ls-files', '--', rel]))) return 'Git does not track it';
-    if ((await this.git.run(root, ['--literal-pathspecs', 'diff', '--quiet', 'HEAD', '--', rel])).status !== 0) {
+    // 1: differences; any other failure (e.g. no commit yet) is not one
+    if ((await this.git.run(root, ['--literal-pathspecs', 'diff', '--quiet', 'HEAD', '--', rel])).status === 1) {
       return 'it has uncommitted changes';
     }
     // not HEAD: a later commit elsewhere in the tree does not keep this

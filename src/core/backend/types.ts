@@ -69,8 +69,6 @@ export interface SwhDeps {
   archiveUrl(): string;
   /** The API token, or `undefined` to make anonymous requests. */
   token(): Promise<string | undefined>;
-  /** Show a warning to the user. */
-  warn(message: string): void;
   /** Called whenever the tokenless rate limit is updated, see {@link Swh.rateLimit}. */
   onRateLimit?(): void;
   /** The Git runner to use. */

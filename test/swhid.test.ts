@@ -62,6 +62,8 @@ test('qualify encoding', () => {
     origin: 'https://h/o r',
     path: '/src/my file é.el',
   });
+  // a character outside the BMP, left unescaped, survives decoding
+  assert.deepEqual(qualifiers('swh:1:cnt:x;origin=https://h/\u{1F600}%20r'), { origin: 'https://h/\u{1F600} r' });
   // the root, lines, a snapshot; a private origin is left out
   assert.equal(
     qualify('swh:1:dir:d', 'https://h/r', 'aa', 'swh:1:rev:y', '.', '3-4'),

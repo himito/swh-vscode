@@ -17,7 +17,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { browseUrl, buildScan, Scan, ScanItem, scanSummary, shortSwhid, Swh, UserError } from '../core';
+import { browseUrl, buildScan, Scan, ScanItem, scanSummary, shortSwhid, Swh, typeOf, UserError } from '../core';
 import { config, info, openUrl } from './helpers';
 import { openSwhidUri } from './reports';
 
@@ -111,7 +111,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * The icon tells the status. A directory's description gives its archived
    * and total file counts, e.g. `3/5`. The tooltip gives the SWHID, as a
    * link to the archive when it is archived. The context value, made of
-   * `swhItem`, `dir` or `file`, and `archived`, selects the actions of the
+   * `swhItem`, `dir`, `file` or `submodule`, and `archived`, selects the actions of the
    * item's context menu in `package.json`. Clicking a file opens it.
    *
    * @param n - The item to show.
@@ -130,7 +130,9 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
     const [icon, color] = ICONS[n.status];
     item.iconPath = new vscode.ThemeIcon(icon, new vscode.ThemeColor(color));
     if (n.counts) item.description = `${n.counts[1]}/${n.counts[0]}`;
-    item.contextValue = ['swhItem', n.dir ? 'dir' : 'file', n.status === 'archived' ? 'archived' : '']
+    // a submodule is a commit, not a file to open
+    const file = !n.dir && typeOf(n.swhid) !== 'rev';
+    item.contextValue = ['swhItem', n.dir ? 'dir' : file ? 'file' : 'submodule', n.status === 'archived' ? 'archived' : '']
       .filter(Boolean)
       .join(' ');
     const tip = new vscode.MarkdownString(undefined, true);
@@ -139,7 +141,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
     tip.appendMarkdown(`**${n.path === '.' ? './' : n.path}**: ${status}\n\n`);
     tip.appendMarkdown(n.status === 'archived' ? `[${n.swhid}](${openSwhidUri(n.swhid)})` : n.swhid);
     item.tooltip = tip;
-    if (!n.dir) item.command = { command: 'swh.scan.openFile', title: 'Open the file', arguments: [n] };
+    if (file) item.command = { command: 'swh.scan.openFile', title: 'Open the file', arguments: [n] };
     return item;
   }
 
@@ -195,14 +197,14 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
   }
 
   /**
-   * Open a file of the scan in an editor; do nothing for a directory.
+   * Open a file of the scan in an editor; do nothing for a directory or a submodule.
    *
    * @param arg - The item to open, else the selected one.
    * @throws {@link UserError} when no item is given or selected.
    */
   async openFile(arg?: ScanItem) {
     const item = this.item(arg);
-    if (item.dir || !this.root) return;
+    if (item.dir || typeOf(item.swhid) === 'rev' || !this.root) return;
     await vscode.window.showTextDocument(vscode.Uri.file(path.join(this.root, item.path)), { preview: true });
   }
 

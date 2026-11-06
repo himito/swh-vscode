@@ -26,6 +26,7 @@ import {
   normalizeOrigin,
   originBibtex,
   type OriginInfo,
+  qualifiers,
   shortHash,
   type Swh,
   type SwhidInfo,
@@ -448,8 +449,8 @@ export class Commands {
     const t = await this.target(this.uriOf(arg));
     const result = await busy('Software Heritage: computing the SWHID…', async () => {
       const info = await this.swh.qualifiedSwhid(t.path, t.lines, what === 'archived');
-      // the selection's lines are those of the working tree's version
-      const lines = info.version ? undefined : t.lines;
+      // the lines the SWHID kept: dropped for an archived version that differs
+      const lines = qualifiers(info.swhid).lines;
       return { info, text: await this.swhidText(info, lines, what, bare, t.path) };
     });
     const { info: i } = result;

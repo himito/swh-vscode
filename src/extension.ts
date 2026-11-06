@@ -50,16 +50,17 @@ export function activate(context: vscode.ExtensionContext) {
     Promise.resolve(tokenOrUndefined(process.env.SWH_API_TOKEN)).then(
       (env) => env ?? (stored ??= Promise.resolve(context.secrets.get(TOKEN_KEY)).then(tokenOrUndefined)),
     );
-  context.secrets.onDidChange((e) => {
-    if (e.key === TOKEN_KEY) stored = undefined;
-  });
+  context.subscriptions.push(
+    context.secrets.onDidChange((e) => {
+      if (e.key === TOKEN_KEY) stored = undefined;
+    }),
+  );
 
   // the backend, configured by the settings
   let statusBar: StatusBar | undefined;
   const swh = new Swh({
     archiveUrl: () => config().get<string>('archiveUrl', 'https://archive.softwareheritage.org'),
     token,
-    warn: (m) => void vscode.window.showWarningMessage(m),
     onRateLimit: () => statusBar?.render(),
     git: new Git(() => config().get<string>('gitPath', 'git') || 'git'),
   });

@@ -238,15 +238,15 @@ export class SwhSwhids extends SwhOrigins {
    * The archive is asked about it only with a public origin, or outside a
    * repository: a repository without a public origin cannot be archived.
    *
-   * @param file - The real path.
    * @param root - The root of the repository holding it, if any.
    * @param rel - The path relative to `root`.
    * @param pub - Whether the repository has a public origin.
+   * @param worktree - Gives its core SWHID, see {@link Swh.worktreeSwhid}.
    * @returns Its core SWHID, its anchor commit if any, and whether it is archived.
    * @throws {@link UserError} when Git or the archive fails.
    */
-  private async worktreeTarget(file: string, root: string | undefined, rel: string | undefined, pub: boolean) {
-    const c = await this.worktreeSwhid(file, root);
+  private async worktreeTarget(root: string | undefined, rel: string | undefined, pub: boolean, worktree: () => Promise<string>) {
+    const c = await worktree();
     return {
       core: c,
       anchor: pub && root ? await this.anchor(root, rel!, c) : undefined,
@@ -259,24 +259,34 @@ export class SwhSwhids extends SwhOrigins {
    * The qualified SWHID of a file or directory, from Git and the archive's API.
    *
    * @param file - The real path.
-   * @param lines - The line range, `A-B` or `A`; dropped for an archived version.
+   * @param root - The root of the repository holding it, if any.
+   * @param lines - The line range, `A-B` or `A`; dropped for an archived
+   * version that differs from the working tree's.
    * @param archivedVersion - Whether to identify the version the archive
    * holds rather than the working tree's; falls back to the working tree's
    * when none is archived.
+   * @param worktree - Gives its core SWHID as it is in the working tree.
    * @returns The SWHID's details.
    * @throws {@link UserError} when Git or the archive fails.
    */
-  private async directSwhid(file: string, lines: string | undefined, archivedVersion: boolean): Promise<SwhidInfo> {
-    const root = await this.git.root(file);
+  private async directSwhid(
+    file: string,
+    root: string | undefined,
+    lines: string | undefined,
+    archivedVersion: boolean,
+    worktree: () => Promise<string>,
+  ): Promise<SwhidInfo> {
     const rel = root ? relativePath(root, file) : undefined;
     const info = root ? await this.directOrigin(root) : null;
     const origin = info?.origin;
     const pub = isPublicOrigin(origin);
     const dir = (await fs.stat(file)).isDirectory();
     const t = (archivedVersion && pub && root ? await this.archivedTarget(root, rel!, dir) : undefined) ??
-      (await this.worktreeTarget(file, root, rel, pub));
+      (await this.worktreeTarget(root, rel, pub, worktree));
+    // the selection's lines hold as long as the archived version is the working tree's
+    const keepLines = !t.version || (lines !== undefined && !dir && t.core === (await worktree()));
     const result: SwhidInfo = {
-      swhid: qualify(t.core, origin, info?.snapshot, t.anchor ? core('rev', t.anchor) : undefined, rel, t.version ? undefined : lines),
+      swhid: qualify(t.core, origin, info?.snapshot, t.anchor ? core('rev', t.anchor) : undefined, rel, keepLines ? lines : undefined),
       core: t.core,
       archived: t.archived,
     };
@@ -310,12 +320,15 @@ export class SwhSwhids extends SwhOrigins {
    */
   async qualifiedSwhid(file: string, lines?: string, archivedVersion = false): Promise<SwhidInfo> {
     const root = await this.git.root(file);
+    // computed once, whether the archive answers or not
+    let swhid: Promise<string> | undefined;
+    const worktree = () => (swhid ??= this.worktreeSwhid(file, root));
     try {
-      return await this.directSwhid(file, lines, archivedVersion);
+      return await this.directSwhid(file, root, lines, archivedVersion, worktree);
     } catch (e) {
       if (!(e instanceof UserError)) throw e;
       // the SWHID from Git alone
-      const c = await this.worktreeSwhid(file, root);
+      const c = await worktree();
       return { swhid: qualify(c, null, null, null, null, lines), core: c, archived: false, unchecked: e.message };
     }
   }
