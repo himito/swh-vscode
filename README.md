@@ -73,22 +73,13 @@ SWHIDs in any document become clickable links that open in the archive. This inc
 
 Without a token, the archive allows 120 requests per hour. With a token [from your archive account](https://archive.softwareheritage.org/api/#authentication), it allows 1200.
 
-Either set the `SWH_API_TOKEN` environment variable (swhd reads it too), or run **Software Heritage: Set API token**. That stores the token in VS Code's secret storage, not in your settings.
-
-## The swhd daemon
-
-You can also run the local [swhd](https://github.com/bzg/swhd) daemon (0.8.0 or later). It caches SWHIDs. Whenever it answers at `swh.daemonUrl`, the extension goes through it, which saves requests against the API's rate limit. The Scan view's header says which backend was used.
-
-```shell
-bbin install io.github.bzg/swhd
-```
+Either set the `SWH_API_TOKEN` environment variable, or run **Software Heritage: Set API token**. That stores the token in VS Code's secret storage, not in your settings.
 
 ## Settings
 
 | Setting | Default | |
 |---|---|---|
 | `swh.archiveUrl` | `https://archive.softwareheritage.org` | The archive's web root. SWHIDs resolve there, and its Web API is at `/api/1` |
-| `swh.daemonUrl` | `http://127.0.0.1:8642` | swhd's URL. Leave it empty to never use swhd |
 | `swh.swhidWithoutContext` | `false` | SWHID commands give bare SWHIDs |
 | `swh.statusBar.enabled` | `true` | Show the archival status in the status bar |
 | `swh.statusBar.lighters` | `SWH✓` … | The status bar texts, by status |
@@ -121,12 +112,12 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   ├── extension.ts     Activation: wires everything and registers the commands
 │   ├── core/            Plain TypeScript, no `vscode` import
 │   │   ├── index.ts     The folder's public API, re-exported
-│   │   ├── backend/     The backend (class Swh): the swhd daemon, or else Git and the archive's Web API
+│   │   ├── backend/     The backend (class Swh): Git and the archive's Web API
 │   │   │   ├── index.ts     Swh itself: scans, refresh, why a file is not archived
 │   │   │   ├── swhids.ts    SWHIDs of files and directories, anchored on archived commits
 │   │   │   ├── origins.ts   Origins, visits, save requests
 │   │   │   ├── known.ts     Which SWHIDs the archive holds
-│   │   │   ├── client.ts    Requests to the archive and to swhd, the rate limit
+│   │   │   ├── client.ts    Requests to the archive, the rate limit
 │   │   │   ├── memo.ts      Remembered answers
 │   │   │   └── types.ts     The data it answers with, and what it needs from its host
 │   │   ├── git.ts       Running Git, and the temporary index copies
@@ -158,4 +149,4 @@ Between folders, modules import a folder's `index.ts` (`from '../core'`); within
 
 ## License
 
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE).
+This project is licensed under GPL-3.0. See [LICENSE](LICENSE).

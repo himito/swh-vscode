@@ -58,7 +58,6 @@ export function activate(context: vscode.ExtensionContext) {
   let statusBar: StatusBar | undefined;
   const swh = new Swh({
     archiveUrl: () => config().get<string>('archiveUrl', 'https://archive.softwareheritage.org'),
-    daemonUrl: () => config().get<string>('daemonUrl', 'http://127.0.0.1:8642'),
     token,
     warn: (m) => void vscode.window.showWarningMessage(m),
     onRateLimit: () => statusBar?.render(),

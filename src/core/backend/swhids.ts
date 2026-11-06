@@ -292,17 +292,15 @@ export class SwhSwhids extends SwhOrigins {
    * The qualified SWHID of a file, a range of its lines, or a directory.
    *
    * @remarks
-   * Through swhd when it runs and the file is outside a repository or in
-   * one with a public origin; directly otherwise. When the archive cannot
-   * be asked (unreachable, rate limit…), the SWHID comes from Git alone,
-   * unqualified but for its lines, and {@link SwhidInfo.unchecked} says why.
+   * When the archive cannot be asked (unreachable, rate limit…), the SWHID
+   * comes from Git alone, unqualified but for its lines, and
+   * {@link SwhidInfo.unchecked} says why.
    *
    * @param file - The real path of a file or directory.
    * @param lines - The line range, `A-B` or `A`.
    * @param archivedVersion - Whether to identify the version the archive holds.
    * @returns The SWHID's details.
-   * @throws {@link UserError} when even Git cannot tell the SWHID, or the
-   * daemon fails.
+   * @throws {@link UserError} when even Git cannot tell the SWHID.
    *
    * @example
    * ```ts
@@ -312,13 +310,6 @@ export class SwhSwhids extends SwhOrigins {
    */
   async qualifiedSwhid(file: string, lines?: string, archivedVersion = false): Promise<SwhidInfo> {
     const root = await this.git.root(file);
-    const origin = root ? await this.originOf(root) : undefined;
-    if ((await this.daemonAvailable()) && (!root || isPublicOrigin(origin))) {
-      const params: Array<[string, string?]> = [];
-      if (archivedVersion) params.push(['archived']);
-      if (lines) params.push(['lines', lines]);
-      return this.daemon('GET', '/swhid', { path: file, params, timeout: 60 });
-    }
     try {
       return await this.directSwhid(file, lines, archivedVersion);
     } catch (e) {
@@ -330,15 +321,14 @@ export class SwhSwhids extends SwhOrigins {
   }
 
   /**
-   * Whether the archive holds a file or directory, as swhd's `/file` tells.
+   * Whether the archive holds a file or directory.
    *
    * @param file - The real path.
    * @param coreSwhid - Its core SWHID when already known, which spares hashing it.
    * @returns Its core SWHID and whether it is archived.
-   * @throws {@link UserError} when Git, the daemon or the archive fails.
+   * @throws {@link UserError} when Git or the archive fails.
    */
   async fileStatus(file: string, coreSwhid?: string): Promise<{ swhid: string; archived: boolean }> {
-    if (await this.daemonAvailable()) return this.daemon('GET', '/file', { path: file });
     const c = coreSwhid ?? (await this.contentSwhid(file, await this.git.root(file)));
     return { swhid: c, archived: await this.archivedP(c) };
   }

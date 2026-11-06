@@ -267,7 +267,7 @@ export const pathOrigin = (origin: string) => hexify(origin, "/:@!$&'()*+,;=");
  *
  * @remarks
  * Only `%`, `;` (the qualifier separator), blanks and control characters
- * are escaped, as the swhd daemon and swh.model do.
+ * are escaped, as swh.model and swhid-clj do.
  *
  * @param origin - An origin URL.
  * @returns The qualifier value.
@@ -282,8 +282,8 @@ export function encodeOrigin(origin: string): string {
 }
 
 /**
- * Encodes a path as the value of a `path` qualifier, as the swhd daemon and
- * swh.model do.
+ * Encodes a path as the value of a `path` qualifier, as swh.model and
+ * swhid-clj do.
  *
  * @param path - A path with `/` separators.
  * @returns The path with every character but `/` and the unreserved ones percent-encoded.
@@ -403,38 +403,6 @@ export function formatDate(date: string): string {
 export function originName(origin: string): string {
   const parts = origin.replace(/\/+$/, '').split('/');
   return parts[parts.length - 1].replace(/\.git$/, '');
-}
-
-/**
- * Compares a version number with a minimum one.
- *
- * @remarks
- * Only the leading numeric part counts, so `0.9.0-dev+abc` is `0.9.0`.
- * Missing components count as 0.
- *
- * @param version - The version to check, e.g. the swhd daemon's; anything
- * that is not a string is too old.
- * @param min - The minimum version, e.g. `"0.8.0"`.
- * @returns `true` when `version` is `min` or later.
- *
- * @example
- * ```ts
- * versionAtLeast('0.9.0-dev+abc', '0.8.0'); // true
- * versionAtLeast('dev', '0.8.0');           // false
- * ```
- */
-export function versionAtLeast(version: unknown, min: string): boolean {
-  if (typeof version !== 'string') return false;
-  const m = /^[0-9]+(\.[0-9]+)*/.exec(version);
-  if (!m) return false;
-  const a = m[0].split('.').map(Number);
-  const b = min.split('.').map(Number);
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const x = a[i] ?? 0;
-    const y = b[i] ?? 0;
-    if (x !== y) return x > y;
-  }
-  return true;
 }
 
 /**

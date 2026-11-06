@@ -25,7 +25,6 @@ import {
   qualify,
   scanSummary,
   shortSwhid,
-  versionAtLeast,
 } from '../src/core';
 
 // Git remote URLs of every form become the URLs the archive knows origins by.
@@ -50,8 +49,8 @@ test('normalizeOrigin', () => {
   assert.deepEqual(originCandidates('/srv/repo'), ['/srv/repo']);
 });
 
-// Qualifier values are percent-encoded as swhd encodes them; the expected
-// values come from swhid-clj, the library swhd renders qualifiers with.
+// Qualifier values are percent-encoded as swh.model and swhid-clj encode
+// them; the expected values come from swhid-clj.
 test('qualify encoding', () => {
   assert.equal(encodeOrigin('https://h/o r\tx\u00a0é'), 'https://h/o%20r%09x%C2%A0é');
   assert.equal(encodePath('/src/my file é;%.el'), '/src/my%20file%20%C3%A9%3B%25.el');
@@ -72,17 +71,12 @@ test('qualify encoding', () => {
   assert.equal(pathOrigin('https://h/a b?c#d'), 'https://h/a%20b%3Fc%23d');
 });
 
-// Path ancestors, shortened SWHIDs, and swhd version comparison.
+// Path ancestors and shortened SWHIDs.
 test('helpers', () => {
   assert.deepEqual(ancestors('.'), []);
   assert.deepEqual(ancestors('a.txt'), ['.']);
   assert.deepEqual(ancestors('a/b/c.txt'), ['.', 'a', 'a/b']);
   assert.equal(shortSwhid('swh:1:cnt:0123456789abcdef0123456789abcdef01234567;lines=1'), 'swh:1:cnt:0123456789;lines=1');
-  assert.ok(versionAtLeast('0.10.0', '0.8.0'));
-  assert.ok(versionAtLeast('0.9.0-dev+abc', '0.8.0'));
-  assert.ok(!versionAtLeast('0.1.9', '0.8.0'));
-  assert.ok(!versionAtLeast('dev', '0.8.0'));
-  assert.ok(!versionAtLeast(undefined, '0.8.0'));
 });
 
 // SWHIDs are found in text with their qualifiers but without trailing

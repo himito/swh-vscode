@@ -1,14 +1,11 @@
 /**
- * Tests of the backend without the daemon, on a real Git repository with a
- * fake archive.
+ * Tests of the backend on a real Git repository with a fake archive.
  *
  * @remarks
  * One temporary repository serves the whole file, and `globalThis.fetch` is
  * replaced with a fake Software Heritage archive. It answers the `/known/`,
  * latest visit and save requests from {@link archived} and {@link origins}.
- * Requests to the daemon's port fail, as when swhd is not running, so the
- * backend talks to the archive directly. No network is needed. Run them
- * with `npm test`.
+ * No network is needed. Run them with `npm test`.
  *
  * @packageDocumentation
  */
@@ -56,8 +53,7 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
 }
 
 // Create the repository: a.txt and sub/b.txt in one commit, and a remote that
-// is never contacted. Then replace `fetch` with the fake archive; the daemon's
-// port refuses connections.
+// is never contacted. Then replace `fetch` with the fake archive.
 before(() => {
   dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'swh-test-')));
   git('init', '-q', '-b', 'main');
@@ -75,7 +71,6 @@ before(() => {
     const url = String(input);
     requests.push(`${init?.method ?? 'GET'} ${url}`);
     const u = new URL(url);
-    if (u.port === '8642') throw new Error('ECONNREFUSED');
     const p = u.pathname.replace(/^\/api\/1/, '');
     const rate = { 'X-RateLimit-Limit': '120', 'X-RateLimit-Remaining': '100', 'X-RateLimit-Reset': String(Date.now() / 1000 + 3600) };
     if (p === '/known/') {
@@ -103,7 +98,7 @@ after(async () => {
 });
 
 /**
- * A backend talking to the fake archive, with no daemon.
+ * A backend talking to the fake archive.
  *
  * @param token - The API token it sends, if any.
  * @returns A fresh backend, its memos empty.
@@ -111,7 +106,6 @@ after(async () => {
 function swh(token?: string) {
   return new Swh({
     archiveUrl: () => 'https://archive.example.org',
-    daemonUrl: () => 'http://127.0.0.1:8642',
     token: async () => token,
     warn: () => undefined,
     git: new Git(),

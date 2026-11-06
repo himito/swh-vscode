@@ -70,7 +70,7 @@ export class Commands {
   /**
    * Creates the commands.
    *
-   * @param swh - The backend that talks to Git, swhd and the archive.
+   * @param swh - The backend that talks to Git and the archive.
    * @param reports - Where the visits and citation reports are shown.
    * @param onArchiveChange - Called after a save request or a refresh, when
    * what the archive holds may have changed, e.g. to recheck the status bar.
@@ -381,13 +381,12 @@ export class Commands {
    *
    * @remarks
    * Implements `swh.refresh`. What the archive holds stays remembered; the
-   * negative answers and the origins' statuses are forgotten, in swhd too
-   * when it runs. The message says when swhd could not forget.
+   * negative answers and the origins' statuses are forgotten.
    */
   async refresh(): Promise<void> {
-    const why = await this.swh.refresh();
+    this.swh.refresh();
     this.onArchiveChange();
-    info(`Forgot what may have changed in the Software Heritage archive${why ? `, but swhd did not (${why})` : ''}`);
+    info('Forgot what may have changed in the Software Heritage archive');
   }
 
   // ------------------------------------------------------------ SWHIDs

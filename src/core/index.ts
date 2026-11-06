@@ -1,6 +1,6 @@
 /**
- * The extension's core: the archive and swhd client, Git, SWHIDs and
- * citations.
+ * The extension's core: the archive client, Git, SWHIDs, citations and
+ * scans.
  *
  * @remarks
  * Nothing here imports `vscode`, which lets the unit tests run it with Node

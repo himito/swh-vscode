@@ -148,8 +148,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    *
    * @remarks
    * The view is focused and shows "Scanning…" while the backend works. The
-   * view's message then gives the repository, the backend used (swhd or the
-   * archive's API) and the figures of the scan; its description gives the
+   * view's message then gives the repository and the figures of the scan; its description gives the
    * number of archived files. A failure is shown in the view's message. When
    * a newer scan has started meanwhile, the result is dropped.
    *
@@ -165,8 +164,6 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
     this.view.description = undefined;
     this.emitter.fire(undefined);
     await vscode.commands.executeCommand('swh.scan.focus');
-    // asked now: a scan may outlast the half minute the daemon's ping is remembered
-    const via = (await this.swh.daemonAvailable()) ? 'via swhd' : "via the archive's API";
     try {
       const nodes = await vscode.window.withProgress({ location: { viewId: 'swh.scan' } }, () => this.swh.tree(root));
       if (id !== this.scanId) return;
@@ -174,7 +171,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
       // archived directories start folded; the root always starts unfolded
       for (const i of scan.items) if (i.dir && (i.status !== 'archived' || i === scan.root)) this.expanded.add(i);
       this.scan = scan;
-      this.view.message = `${root} (tracked working tree, ${via})\n${scanSummary(scan)}`;
+      this.view.message = `${root} (tracked working tree)\n${scanSummary(scan)}`;
       this.view.description = `${scan.archivedFiles} of ${scan.files} files archived`;
       this.emitter.fire(undefined);
     } catch (e) {

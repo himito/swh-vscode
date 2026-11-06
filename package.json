@@ -292,12 +292,7 @@
         "swh.archiveUrl": {
           "type": "string",
           "default": "https://archive.softwareheritage.org",
-          "markdownDescription": "Web root of the Software Heritage archive, its Web API at `/api/1`. If you use swhd, point it at the same instance."
-        },
-        "swh.daemonUrl": {
-          "type": "string",
-          "default": "http://127.0.0.1:8642",
-          "markdownDescription": "Base URL of the local [swhd](https://github.com/bzg/swhd) daemon, used when it answers there. Leave it empty to never use it. The API token goes to it with each request, unencrypted, so keep it local."
+          "markdownDescription": "Web root of the Software Heritage archive, its Web API at `/api/1`."
         },
         "swh.swhidWithoutContext": {
           "type": "boolean",

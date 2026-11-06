@@ -119,7 +119,7 @@ export class SwhOrigins extends SwhKnown {
   }
 
   /**
-   * The last ten visits of an origin, as swhd's `/visits` gives them.
+   * The last ten visits of an origin.
    *
    * @param info - The origin's status; a non-archived origin has no visits, and the archive is not asked.
    * @returns The origin URL and its visits, most recent first.
@@ -160,12 +160,9 @@ export class SwhOrigins extends SwhKnown {
    * @param upstream - Whether to tell, too, if the branch's upstream commit is archived.
    * @returns The origin's status.
    * @throws {@link UserError} when the repository has no remote (`No remote`),
-   * or the daemon or the archive cannot answer.
+   * or the archive cannot answer.
    */
   async origin(root: string, upstream = false): Promise<OriginInfo> {
-    if (await this.daemonAvailable()) {
-      return this.daemon('GET', '/origin', { path: root, params: upstream ? [['upstream']] : [], timeout: 60 });
-    }
     const info = await this.directOrigin(root);
     if (!info) throw new UserError('No remote');
     return { ...info, ...(upstream ? await this.directUpstream(root, info) : {}) };
@@ -177,12 +174,9 @@ export class SwhOrigins extends SwhKnown {
    *
    * @param root - The repository's root directory.
    * @returns The origin's status, or `null` without a remote.
-   * @throws {@link UserError} when the daemon or the archive cannot answer.
+   * @throws {@link UserError} when the archive cannot answer.
    */
   async originQuiet(root: string): Promise<OriginInfo | null> {
-    if ((await this.daemonAvailable()) && (await this.remoteUrl(root))) {
-      return this.daemon('GET', '/origin', { path: root });
-    }
     return this.directOrigin(root);
   }
 
@@ -194,11 +188,10 @@ export class SwhOrigins extends SwhKnown {
    * @returns The origin URL and its visits, most recent first; none when it
    * is not archived.
    * @throws {@link UserError} when there is no remote, `origin` is not
-   * public, or the daemon or the archive cannot answer.
+   * public, or the archive cannot answer.
    */
   async visits(root: string | undefined, origin?: string): Promise<{ origin: string; visits: any[] }> {
     if (origin) return this.originVisits(await this.originStatus(origin));
-    if (await this.daemonAvailable()) return this.daemon('GET', '/visits', { path: root, timeout: 60 });
     return this.originVisits(await this.origin(root!));
   }
 
@@ -239,10 +232,9 @@ export class SwhOrigins extends SwhKnown {
    * @param root - The repository's root directory.
    * @returns The save request, see {@link Swh.saveOrigin}.
    * @throws {@link UserError} when there is no remote, the origin is not
-   * public, or the daemon or the archive refuses or cannot answer.
+   * public, or the archive refuses or cannot answer.
    */
   async save(root: string): Promise<any> {
-    if (await this.daemonAvailable()) return this.daemon('POST', '/save', { path: root });
     const origin = await this.originOf(root);
     if (!origin) throw new UserError('No remote');
     if (!isPublicOrigin(origin)) throw new UserError('The origin is not a public URL');

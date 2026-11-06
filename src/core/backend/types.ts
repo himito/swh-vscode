@@ -6,7 +6,7 @@
 
 import type { Git } from '../git';
 
-/** The archival status of a repository's origin, as swhd's `/origin` gives it. */
+/** The archival status of a repository's origin. */
 export interface OriginInfo {
   /** The origin URL, normalized as the archive names it, e.g. `https://github.com/owner/repo`. */
   origin: string;
@@ -24,7 +24,7 @@ export interface OriginInfo {
   'upstream-archived'?: boolean;
 }
 
-/** The SWHID of a file, directory or range of lines, as swhd's `/swhid` gives it. */
+/** The SWHID of a file, directory or range of lines. */
 export interface SwhidInfo {
   /** The qualified SWHID: the core SWHID with its context qualifiers (origin, visit, anchor, path, lines). */
   swhid: string;
@@ -67,8 +67,6 @@ export interface TreeNode {
 export interface SwhDeps {
   /** The archive's web root, e.g. `https://archive.softwareheritage.org`; read at each request. */
   archiveUrl(): string;
-  /** swhd's base URL; an empty string means never use the daemon. */
-  daemonUrl(): string;
   /** The API token, or `undefined` to make anonymous requests. */
   token(): Promise<string | undefined>;
   /** Show a warning to the user. */

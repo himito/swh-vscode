@@ -3,13 +3,8 @@
  * or Git, behind the single class {@link Swh}.
  *
  * @remarks
- * Every request goes one of two ways:
- *
- * - through the local swhd daemon, when it answers at the configured URL
- *   (see {@link Swh.daemonAvailable}); it keeps a persistent cache of
- *   SWHIDs, which spares the archive's rate limit;
- * - otherwise directly: SWHIDs are computed with Git, and the archive's Web
- *   API (`/api/1`) is asked whether it holds them.
+ * SWHIDs are computed with Git, and the archive's Web API (`/api/1`) is
+ * asked whether it holds them.
  *
  * Answers that may change are remembered for a while (see `MEMO_TTL`):
  * what the archive holds stays so for the session, what it does not hold
@@ -24,22 +19,17 @@
 
 import { UserError } from '../http';
 import { relativePath } from '../git';
-import { ancestors, core, isPublicOrigin, typeOf, versionAtLeast } from '../swhid';
+import { ancestors, core, isPublicOrigin, typeOf } from '../swhid';
 import { forgetNegatives } from './memo';
 import { SwhSwhids } from './swhids';
 import type { TreeNode } from './types';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-export { DAEMON_MIN_VERSION, RATE_LIMIT_MESSAGE } from './client';
+export { RATE_LIMIT_MESSAGE } from './client';
 export type { OriginInfo, SwhDeps, SwhidInfo, TreeNode } from './types';
-
-/** Seconds to wait for swhd's `/tree`: a large repository takes many calls. */
-export const TREE_TIMEOUT = 600;
 
 /**
  * The Software Heritage client: archival status, SWHIDs, visits, save
- * requests and scans, through swhd or directly.
+ * requests and scans.
  *
  * @remarks
  * One instance lives as long as the extension; it holds the memos of the
@@ -64,7 +54,7 @@ export class Swh extends SwhSwhids {
    * @returns The nodes, the root `.` first, then in `git ls-tree` order.
    * @throws {@link UserError} when Git or the archive fails.
    */
-  private async directTree(root: string): Promise<TreeNode[]> {
+  async tree(root: string): Promise<TreeNode[]> {
     const tree = await this.worktreeTree(root);
     const lsTree = (await this.git.get(root, ['ls-tree', '-r', '-t', '-z', tree])) ?? '';
     const nodes: TreeNode[] = [{ path: '.', swhid: core('dir', tree), dir: true, archived: false }];
@@ -89,53 +79,18 @@ export class Swh extends SwhSwhids {
     return nodes.map((n) => ({ ...n, archived: this.knownP(n.swhid) || covered(n) }));
   }
 
-  /**
-   * Every file and directory of the tracked working tree, with its archival status.
-   *
-   * @remarks
-   * Through swhd's `/tree` when it runs, waiting up to {@link TREE_TIMEOUT}
-   * seconds; directly otherwise, see {@link Swh.directTree}.
-   *
-   * @param root - The repository's root directory.
-   * @returns The nodes, unsorted but for the direct backend's root first.
-   * @throws {@link UserError} when Git, the daemon or the archive fails.
-   */
-  async tree(root: string): Promise<TreeNode[]> {
-    if (!(await this.daemonAvailable())) return this.directTree(root);
-    const answer = await this.daemon('GET', '/tree', { path: root, timeout: TREE_TIMEOUT });
-    return Object.entries(answer ?? {}).map(([p, e]: [string, any]) => {
-      return { path: p, swhid: e.swhid, dir: !!e['dir?'], archived: !!e.archived };
-    });
-  }
-
   // ---------------------------------------------------------------- refresh
 
   /**
-   * Forget what may have changed in the archive, here and in swhd.
+   * Forget what may have changed in the archive.
    *
    * @remarks
    * Forgets the origins' status and every "not archived" answer; what the
-   * archive holds stays remembered. The daemon is pinged again, as it may
-   * have started or stopped, and asked to forget too (swhd 0.10.0 or later).
-   *
-   * @returns Why swhd did not forget, in words, or `undefined` when it did
-   * or is not running.
+   * archive holds stays remembered.
    */
-  async refresh(): Promise<string | undefined> {
+  refresh(): void {
     this.originMemo.clear();
     forgetNegatives(this.knownMemo);
-    // swhd may have started, or stopped
-    this.daemonChecked = undefined;
-    const pong = await this.daemonPong();
-    if (!pong) return undefined;
-    if (!versionAtLeast(pong.version, '0.10.0')) return `it needs 0.10.0, not ${pong.version}`;
-    try {
-      await this.daemon('POST', '/forget', { timeout: 60 });
-      return undefined;
-    } catch (e) {
-      if (e instanceof UserError) return e.message;
-      throw e;
-    }
   }
 
   // ---------------------------------------------------------------- why not archived
