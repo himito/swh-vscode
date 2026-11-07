@@ -350,6 +350,23 @@ export function encodeOrigin(origin: string): string {
 export const encodePath = (path: string) => hexify(path, '/');
 
 /**
+ * The value of a SWHID's `lines` qualifier for a range of lines.
+ *
+ * @param first - The first line, numbered from 1.
+ * @param last - The last line, numbered from 1; `first` or after.
+ * @returns `"A-B"`, or `"A"` for a single line.
+ *
+ * @example
+ * ```ts
+ * lineRange(2, 3); // '2-3'
+ * lineRange(5, 5); // '5'
+ * ```
+ */
+export function lineRange(first: number, last: number): string {
+  return first === last ? String(first) : `${first}-${last}`;
+}
+
+/**
  * Qualifies a core SWHID with its context.
  *
  * @remarks

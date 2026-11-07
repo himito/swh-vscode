@@ -19,6 +19,7 @@ import {
   encodePath,
   findSwhids,
   isSwhid,
+  lineRange,
   normalizeOrigin,
   originCandidates,
   originName,
@@ -107,6 +108,12 @@ test('helpers', () => {
   assert.equal(originName('https://github.com/bzg/swh.el'), 'swh.el');
   assert.equal(originName('https://gitlab.com/a/repo.git/'), 'repo');
   assert.equal(originName('C:\\Users\\me\\repo.git'), 'repo');
+});
+
+test('lineRange', () => {
+  assert.equal(lineRange(2, 3), '2-3');
+  assert.equal(lineRange(5, 5), '5');
+  assert.equal(lineRange(1, 120), '1-120');
 });
 
 test('isSwhid', () => {

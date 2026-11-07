@@ -13,7 +13,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { UserError } from '../core';
+import { lineRange, UserError } from '../core';
 import type { Maybe } from '../core/types';
 
 /**
@@ -144,10 +144,25 @@ export function fileEditor(): Maybe<vscode.TextEditor> {
  * selection is empty.
  */
 export function selectionLines(editor: vscode.TextEditor): Maybe<string> {
-  const sel = editor.selection;
-  if (sel.isEmpty) return undefined;
-  const from = sel.start.line + 1;
-  // a selection ending at the start of a line does not hold it
-  const to = sel.end.character === 0 && sel.end.line > sel.start.line ? sel.end.line : sel.end.line + 1;
-  return from === to ? String(from) : `${from}-${to}`;
+  const { selection } = editor;
+  if (selection.isEmpty) return undefined;
+  const firstLine = selection.start.line + 1;
+  return lineRange(firstLine, lastSelectedLine(selection));
+}
+
+/**
+ * The last line a non-empty selection holds, numbered from 1.
+ *
+ * @remarks
+ * A selection that ends at the very start of a line, as when whole lines
+ * are selected, does not hold that line.
+ *
+ * @param selection - The selection, not empty.
+ * @returns The line number.
+ */
+function lastSelectedLine(selection: vscode.Selection): number {
+  const { start, end } = selection;
+  const endsAtLineStart = end.character === 0 && end.line > start.line;
+  // positions count lines from 0: the line before `end` is `end.line` counted from 1
+  return endsAtLineStart ? end.line : end.line + 1;
 }
