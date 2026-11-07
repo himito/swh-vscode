@@ -38,7 +38,7 @@ import type { Maybe } from '../types';
 export { HttpArchiveApi, type HttpArchiveDeps, KNOWN_BATCH_SIZE } from './adapters/httpArchiveApi';
 export { type ArchiveApi, type CitationTarget, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from './archiveApi';
 export { VISITS_SHOWN } from './origins';
-export type { CitationAnswer, OriginInfo, OriginVisits, SaveRequest, SwhDeps, SwhidInfo, Token, TreeNode, Visit } from './types';
+export type { CitationAnswer, FileStatus, OriginInfo, OriginVisits, SaveRequest, SwhDeps, SwhidInfo, Token, TreeNode, Visit } from './types';
 
 /**
  * The Software Heritage client: archival status, SWHIDs, visits, save

@@ -56,6 +56,20 @@ const DESCRIPTIONS: Record<Status, string> = {
   error: 'Software Heritage: the check failed',
 };
 
+/** What the status bar shows the status of. */
+export type Shown = {
+  /** The real path of the file or directory. */
+  path: string;
+  /** Whether it is a directory. */
+  dir: boolean;
+};
+
+/** What the status bar would show the status of, see `StatusBar.modePath`. */
+type ShownCandidate = Shown & {
+  /** Whether its editor has unsaved changes. */
+  dirty: boolean;
+};
+
 /** What the status bar knows about one path. */
 type Entry = {
   /** The path and modification time it was checked at, see `stampOf`. */
@@ -89,7 +103,7 @@ export class StatusBar implements vscode.Disposable {
   /** The number of the latest call to {@link StatusBar.update}. */
   private updates = 0;
   /** The path shown, and whether it is a directory; undefined when the item is hidden. */
-  current?: { path: string; dir: boolean };
+  current?: Shown;
   /** The item and the event listeners, disposed of with the status bar. */
   private disposables: vscode.Disposable[] = [];
 
@@ -151,7 +165,7 @@ export class StatusBar implements vscode.Disposable {
    * @returns The real path, whether it is a directory, and whether its editor
    * has unsaved changes; undefined when there is nothing to show.
    */
-  private async modePath(): Promise<Maybe<{ path: string; dir: boolean; dirty: boolean }>> {
+  private async modePath(): Promise<Maybe<ShownCandidate>> {
     const editor = fileEditor();
     let p: string;
     let dir = false;

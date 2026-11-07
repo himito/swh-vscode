@@ -1,13 +1,11 @@
 /**
- * Helpers that every command shares: messages, prompts, progress, error
- * reporting, and where the user is (the current file or folder).
+ * Helpers that every command shares: settings, messages, prompts, progress,
+ * and where the user is (the current file or folder).
  *
  * @remarks
  * This is the thin layer between the commands and the VS Code window API.
- * Commands throw {@link core!UserError} for problems the user can act on and
- * {@link core!Cancelled} when the user dismisses a prompt; {@link command} turns
- * both into the right kind of feedback, so command code never shows errors
- * itself.
+ * Commands do not report their errors themselves: they throw them, and
+ * `registerCommands` (see `commands/register.ts`) reports them.
  *
  * @packageDocumentation
  */
@@ -15,7 +13,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { Cancelled, UserError } from '../core';
+import { UserError } from '../core';
 import type { Maybe } from '../core/types';
 
 /**
@@ -72,55 +70,6 @@ export async function openUrl(url: string): Promise<void> {
 }
 
 /**
- * Wraps an async function as a command handler that reports its errors.
- *
- * @remarks
- * A {@link core!Cancelled} error is ignored, a {@link core!UserError} is shown as a
- * warning with its message, and any other error is shown as an error
- * prefixed with "Software Heritage:". The handler itself never rejects.
- *
- * @param fn - The command's implementation.
- * @returns A handler for `vscode.commands.registerCommand`.
- */
-export function command<A extends unknown[]>(fn: (...args: A) => Promise<unknown>) {
-  return async (...args: A) => {
-    try {
-      await fn(...args);
-    } catch (e) {
-      if (e instanceof Cancelled) return;
-      if (e instanceof UserError) {
-        void vscode.window.showWarningMessage(e.message);
-      } else {
-        void vscode.window.showErrorMessage(`Software Heritage: ${(e as Error)?.message ?? e}`);
-      }
-    }
-  };
-}
-
-/**
- * A command's implementation.
- *
- * @remarks
- * Its arguments come from VS Code untyped: a `Uri` from a context menu, an
- * item from a tree view, options from a keybinding, or nothing from the
- * command palette.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type CommandHandler = (...args: any[]) => Promise<unknown>;
-
-/**
- * Registers commands whose errors are reported to the user, see {@link command}.
- *
- * @param context - The extension context, which disposes of the commands on deactivation.
- * @param handlers - Each command's implementation, by command id.
- */
-export function registerCommands(context: vscode.ExtensionContext, handlers: Record<string, CommandHandler>): void {
-  for (const [id, handler] of Object.entries(handlers)) {
-    context.subscriptions.push(vscode.commands.registerCommand(id, command(handler)));
-  }
-}
-
-/**
  * Resolves a path to its true name, following symbolic links.
  *
  * @param p - The path to resolve.
@@ -148,8 +97,10 @@ export async function realpath(p: string): Promise<string> {
 export function currentDir(): string {
   const doc = vscode.window.activeTextEditor?.document;
   if (doc?.uri.scheme === 'file' && !doc.isUntitled) return path.dirname(doc.uri.fsPath);
+
   const folders = vscode.workspace.workspaceFolders?.filter((f) => f.uri.scheme === 'file') ?? [];
   if (folders.length) return folders[0].uri.fsPath;
+
   throw new UserError('Open a folder or a file first');
 }
 

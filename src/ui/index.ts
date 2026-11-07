@@ -1,7 +1,7 @@
 /**
- * The extension's VS Code side: the commands, the Menu and Scan views, the
- * status bar, the reports and SWHID links, the API token, and the shared
- * helpers.
+ * The extension's VS Code side: the commands and their registration, the
+ * Menu and Scan views, the status bar, the reports and SWHID links, the API
+ * token, and the shared helpers.
  *
  * @packageDocumentation
  */

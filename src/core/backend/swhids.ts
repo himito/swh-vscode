@@ -12,7 +12,7 @@ import { UserError } from '../errors';
 import { core, hashOf, isPublicOrigin, qualify } from '../swhid';
 import { memoPut, uniq } from './memo';
 import { SwhOrigins } from './origins';
-import type { SwhidInfo } from './types';
+import type { FileStatus, SwhidInfo } from './types';
 import type { Maybe } from '../types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -342,7 +342,7 @@ export class SwhSwhids extends SwhOrigins {
    * @returns Its core SWHID and whether it is archived.
    * @throws {@link UserError} when Git or the archive fails.
    */
-  async fileStatus(file: string, coreSwhid?: string): Promise<{ swhid: string; archived: boolean }> {
+  async fileStatus(file: string, coreSwhid?: string): Promise<FileStatus> {
     const c = coreSwhid ?? (await this.contentSwhid(file, await this.git.root(file)));
     return { swhid: c, archived: await this.archivedP(c) };
   }

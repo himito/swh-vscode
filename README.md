@@ -164,13 +164,14 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │       │   ├── archive.ts   Status, visits, save requests, refresh
 │       │   ├── swhid.ts     SWHIDs, permalinks, Markdown links
 │       │   ├── citation.ts  BibTeX citations
-│       │   └── misc.ts      Opening a SWHID, the Quick Pick menu
+│       │   ├── misc.ts      Opening a SWHID, the Quick Pick menu
+│       │   └── register.ts  Registering the commands, and reporting their errors
 │       ├── menu.ts      The menu's entries, shared by the Menu view and the Quick Pick menu
 │       ├── menuView.ts  The Menu view
 │       ├── scanView.ts  The Scan view
 │       ├── statusBar.ts The archival status in the status bar
 │       ├── reports.ts   The read-only reports (visits, citations) and the SWHID links
-│       └── helpers.ts   Shared helpers: messages, progress, commands, the current file or folder
+│       └── helpers.ts   Shared helpers: settings, messages, progress, the current file or folder
 └── test/
     ├── swhid.test.ts        Unit tests: SWHIDs, origins, citations, the scan model
     ├── json.test.ts         Unit tests: the archive's JSON answers, mapped

@@ -49,7 +49,12 @@ export class HttpArchiveApi implements ArchiveApi {
    * request, and the API it is of; `undefined` until one is made, and again
    * once a request is made with a token.
    */
-  private lastRateLimit?: { api: string; limit: RateLimit };
+  private lastRateLimit?: {
+    /** The API it is of, as {@link HttpArchiveApi.apiUrl} gives its root. */
+    api: string;
+    /** The rate limit. */
+    limit: RateLimit;
+  };
 
   /**
    * Creates the implementation.

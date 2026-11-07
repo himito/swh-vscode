@@ -76,6 +76,14 @@ export type SwhidInfo = {
   unchecked?: string;
 };
 
+/** Whether the archive holds a file or directory, see {@link Swh.fileStatus}. */
+export type FileStatus = {
+  /** Its core SWHID, e.g. `swh:1:cnt:…`. */
+  swhid: string;
+  /** Whether the archive holds it. */
+  archived: boolean;
+};
+
 /** A file or directory of the tracked working tree, with its archival status. */
 export type TreeNode = {
   /** The path relative to the repository root, with `/` separators; `.` for the root. */
@@ -97,7 +105,14 @@ export type TreeNode = {
  * - `'failed'`: the archive failed to make one.
  * - `'not-archived'`: the archive was not asked, as it does not hold the code.
  */
-export type CitationAnswer = { entry: string } | 'no-metadata' | 'failed' | 'not-archived';
+export type CitationAnswer =
+  | {
+      /** The archive's BibTeX entry. */
+      entry: string;
+    }
+  | 'no-metadata'
+  | 'failed'
+  | 'not-archived';
 
 /**
  * What {@link Swh} needs from its host: Git, and the archive.
