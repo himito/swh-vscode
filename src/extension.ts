@@ -109,13 +109,20 @@ export function activate(context: vscode.ExtensionContext) {
 /**
  * Copies the SWHID of what the status bar item shows, when it is clicked.
  *
+ * @remarks
+ * A file is the active editor's, so it is copied as the Command Palette
+ * would, with the selected lines. A folder is shown when no file editor is
+ * open, so it must be given by its path.
+ *
  * @param commands - The commands, which copy the SWHID.
  * @param statusBar - The status bar item; nothing is copied when it shows nothing.
  */
 async function copyStatusBarSwhid(commands: Commands, statusBar: Maybe<StatusBar>): Promise<void> {
-  const current = statusBar?.current;
-  if (!current) return;
-  await commands.swhidCopy('swhid', current.dir ? { path: current.path } : undefined);
+  const shown = statusBar?.current;
+  if (!shown) return;
+
+  const target: CommandArg = shown.dir ? { path: shown.path } : undefined;
+  await commands.swhidCopy('swhid', target);
 }
 
 /**
@@ -130,10 +137,14 @@ async function setToken(apiToken: ApiToken): Promise<void> {
     ignoreFocusOut: true,
   });
   if (value === undefined) return;
+
+  // store the token, or clear it if blank
   if (!(await apiToken.store(value))) {
     info('Software Heritage API token cleared: the value was blank');
     return;
   }
+
+  // if the token is set in the environment, it takes precedence, so warn the user
   info(
     envToken()
       ? 'Token stored; SWH_API_TOKEN, set in the environment, still takes precedence'
