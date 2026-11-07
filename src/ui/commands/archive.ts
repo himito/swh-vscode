@@ -4,8 +4,7 @@
  * @packageDocumentation
  */
 
-import { core, formatDate, type OriginInfo, type OriginVisits, type SaveRequest, shortHash, type Visit } from '../../core';
-import type { Maybe } from '../../core/types';
+import { core, formatDate, type Maybe, type OriginInfo, type OriginVisits, type SaveRequest, shortHash, type Visit } from '#core';
 import { ask, busy, info } from '../helpers';
 import type { CommandContext } from './context';
 

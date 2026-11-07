@@ -12,8 +12,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Cancelled, isPublicOrigin, parseOrigin, type Swh, UserError } from '../../core';
-import type { Maybe } from '../../core/types';
+import { Cancelled, isPublicOrigin, type Maybe, parseOrigin, type Swh, UserError } from '#core';
 import type { Reports } from '../reports';
 import { ask, config, fileEditor, realCurrentDir, realpath, selectionLines } from '../helpers';
 

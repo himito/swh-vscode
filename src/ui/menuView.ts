@@ -17,7 +17,7 @@
 import * as vscode from 'vscode';
 import { config } from './helpers';
 import { MENU, type MenuEntry, type MenuGroup } from './menu';
-import type { Maybe } from '../core/types';
+import type { Maybe } from '#core';
 
 /** A node of the Menu view's tree: a group, or one of its entries. */
 type MenuNode = MenuGroup | MenuEntry;

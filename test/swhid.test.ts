@@ -30,7 +30,7 @@ import {
   scanSummary,
   shortSwhid,
   UserError,
-} from '../src/core';
+} from '#core';
 
 // Git remote URLs of every form become the URLs the archive knows origins by.
 test('normalizeOrigin', () => {

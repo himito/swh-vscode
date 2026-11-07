@@ -17,7 +17,7 @@
  * @packageDocumentation
  */
 
-import type { Swh } from '../../core';
+import type { Swh } from '#core';
 import type { Reports } from '../reports';
 import { ArchiveCommands } from './archive';
 import { CitationCommands } from './citation';

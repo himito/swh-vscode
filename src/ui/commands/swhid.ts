@@ -7,8 +7,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { bibtex, browseUrl, citationWhat, isPublicOrigin, normalizeOrigin, qualifiers, shortHash, type SwhidInfo } from '../../core';
-import type { Maybe } from '../../core/types';
+import { bibtex, browseUrl, citationWhat, isPublicOrigin, type Maybe, normalizeOrigin, qualifiers, shortHash, type SwhidInfo } from '#core';
 import { ask, busy, info, openUrl } from '../helpers';
 import type { ArchiveCommands } from './archive';
 import type { CommandArg, CommandContext, Target } from './context';

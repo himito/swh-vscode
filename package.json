@@ -28,6 +28,20 @@
     "bibtex"
   ],
   "main": "./out/src/extension.js",
+  "imports": {
+    "#core": {
+      "types": "./src/core/index.ts",
+      "default": "./out/src/core/index.js"
+    },
+    "#core/*": {
+      "types": "./src/core/*.ts",
+      "default": "./out/src/core/*.js"
+    },
+    "#ui": {
+      "types": "./src/ui/index.ts",
+      "default": "./out/src/ui/index.js"
+    }
+  },
   "icon": "assets/swh-logo-128.png",
   "scripts": {
     "compile": "tsc -p .",

@@ -12,7 +12,7 @@
 
 import * as vscode from 'vscode';
 import { config } from './helpers';
-import { findSwhids } from '../core';
+import { findSwhids } from '#core';
 
 /** The URI scheme of the report documents. */
 export const REPORT_SCHEME = 'swh-report';

@@ -14,7 +14,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Git, HttpArchiveApi, type ScanItem, Swh } from './core';
+import { Git, HttpArchiveApi, type Maybe, type ScanItem, Swh } from '#core';
 import {
   ApiToken,
   CommandArg,
@@ -30,8 +30,7 @@ import {
   StatusBar,
   type SwhidCommands,
   SwhidLinks,
-} from './ui';
-import type { Maybe } from './core/types';
+} from '#ui';
 
 /**
  * Activates the extension.

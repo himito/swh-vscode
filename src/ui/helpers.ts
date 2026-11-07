@@ -13,8 +13,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { lineRange, UserError } from '../core';
-import type { Maybe } from '../core/types';
+import { lineRange, type Maybe, UserError } from '#core';
 
 /**
  * The extension's settings, the `swh.*` section of the configuration.

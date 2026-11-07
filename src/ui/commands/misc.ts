@@ -5,8 +5,7 @@
  */
 
 import * as vscode from 'vscode';
-import { browseUrl, isSwhid } from '../../core';
-import type { Maybe } from '../../core/types';
+import { browseUrl, isSwhid, type Maybe } from '#core';
 import { config, openUrl } from '../helpers';
 import { MENU, type MenuEntry } from '../menu';
 import type { CommandContext } from './context';

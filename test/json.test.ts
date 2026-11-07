@@ -9,8 +9,8 @@
 
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { toCitationEntry, toKnown, toSaveRequest, toVisit, toVisits } from '../src/core/backend/adapters/json';
-import { UserError } from '../src/core';
+import { toCitationEntry, toKnown, toSaveRequest, toVisit, toVisits } from '#core/backend/adapters/json';
+import { UserError } from '#core';
 
 test('toVisit keeps the fields of a well-formed visit', () => {
   const raw = { date: '2024-01-02T03:04:05Z', status: 'full', snapshot: 'ab'.repeat(20), visit: 7, type: 'git' };

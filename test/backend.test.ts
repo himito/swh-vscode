@@ -16,7 +16,7 @@ import { execFileSync } from 'child_process';
 import { promises as fs, realpathSync, mkdtempSync, writeFileSync, mkdirSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Git, HttpArchiveApi, Swh } from '../src/core';
+import { Git, HttpArchiveApi, Swh } from '#core';
 
 /** The temporary Git repository the tests run on, created before them. */
 let dir: string;

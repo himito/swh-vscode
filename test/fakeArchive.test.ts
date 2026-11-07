@@ -12,7 +12,7 @@
 
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { type ArchiveApi, type CitationTarget, Git, type LatestVisit, type SaveRequest, Swh, UserError, type Visit } from '../src/core';
+import { type ArchiveApi, type CitationTarget, Git, type LatestVisit, type SaveRequest, Swh, UserError, type Visit } from '#core';
 
 /** A fake archive in memory, which records what it is asked. */
 class FakeArchive implements ArchiveApi {

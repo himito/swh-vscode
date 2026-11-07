@@ -11,8 +11,7 @@
  */
 
 import * as vscode from 'vscode';
-import type { Token } from '../core';
-import type { Maybe } from '../core/types';
+import type { Maybe, Token } from '#core';
 
 /** The key of the API token in VS Code's secret storage. */
 const TOKEN_KEY = 'swh.apiToken';

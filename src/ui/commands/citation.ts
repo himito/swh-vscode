@@ -5,8 +5,7 @@
  */
 
 import * as vscode from 'vscode';
-import { citationWhat, originBibtex } from '../../core';
-import type { Maybe } from '../../core/types';
+import { citationWhat, type Maybe, originBibtex } from '#core';
 import { busy, fileEditor, info } from '../helpers';
 import type { CommandArg, CommandContext } from './context';
 import type { SwhidCommands } from './swhid';

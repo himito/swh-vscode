@@ -17,10 +17,9 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { browseUrl, buildScan, Scan, ScanItem, scanSummary, shortSwhid, Swh, typeOf, UserError } from '../core';
+import { browseUrl, buildScan, type Maybe, Scan, ScanItem, scanSummary, shortSwhid, Swh, typeOf, UserError } from '#core';
 import { config, info, openUrl } from './helpers';
 import { openSwhidUri } from './reports';
-import type { Maybe } from '../core/types';
 
 /** The icon and its theme color for each scan status: a codicon name and a theme color id. */
 const ICONS = {

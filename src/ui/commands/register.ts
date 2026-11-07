@@ -11,7 +11,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Cancelled, UserError } from '../../core';
+import { Cancelled, UserError } from '#core';
 
 /**
  * Wraps an async function as a command handler that reports its errors.

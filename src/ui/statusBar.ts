@@ -18,8 +18,7 @@
 
 import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
-import { core, isPublicOrigin, RATE_LIMIT_MESSAGE, Swh } from '../core';
-import type { Maybe } from '../core/types';
+import { core, isPublicOrigin, type Maybe, RATE_LIMIT_MESSAGE, Swh } from '#core';
 import { config, fileEditor, realCurrentDir } from './helpers';
 
 /**
