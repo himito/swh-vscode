@@ -46,9 +46,10 @@ export type HttpArchiveDeps = {
 export class HttpArchiveApi implements ArchiveApi {
   /**
    * The tokenless rate limit, from the headers of the latest anonymous
-   * request; `undefined` until one is made.
+   * request, and the API it is of; `undefined` until one is made, and again
+   * once a request is made with a token.
    */
-  private lastRateLimit?: RateLimit;
+  private lastRateLimit?: { api: string; limit: RateLimit };
 
   /**
    * Creates the implementation.
@@ -141,10 +142,13 @@ export class HttpArchiveApi implements ArchiveApi {
   /**
    * The tokenless rate limit, from the headers of the latest anonymous request.
    *
-   * @returns The rate limit, or `undefined` until an anonymous request is made.
+   * @returns The rate limit, or `undefined` until an anonymous request is
+   * made, after a request with a token, or when it is of another archive
+   * than the current `archiveUrl`.
    */
   rateLimit(): Maybe<RateLimit> {
-    return this.lastRateLimit;
+    const last = this.lastRateLimit;
+    return last && last.api === this.apiUrl('') ? last.limit : undefined;
   }
 
   // ---------------------------------------------------------------- HTTP
@@ -194,7 +198,8 @@ export class HttpArchiveApi implements ArchiveApi {
     const headers = await this.headers(body);
     const resp = await retrieve(method, this.apiUrl(p), body, headers, TIMEOUT);
     if (!resp) throw new UserError(`Cannot reach the Software Heritage archive at ${this.deps.archiveUrl()}`);
-    if (!headers.Authorization) this.trackRateLimit(resp);
+    if (headers.Authorization) this.forgetRateLimit();
+    else this.trackRateLimit(resp);
     if (resp.status === 429) throw new UserError(`${RATE_LIMIT_MESSAGE}; retry in ${resp.retryAfter ?? 'a few'} seconds`);
     return resp;
   }
@@ -209,10 +214,19 @@ export class HttpArchiveApi implements ArchiveApi {
     const remaining = headerNumber(resp.headers, 'X-RateLimit-Remaining');
     if (limit === undefined || remaining === undefined) return;
     this.lastRateLimit = {
-      used: limit - remaining,
-      limit,
-      reset: headerNumber(resp.headers, 'X-RateLimit-Reset') ?? now() + 3600,
+      api: this.apiUrl(''),
+      limit: { used: limit - remaining, limit, reset: headerNumber(resp.headers, 'X-RateLimit-Reset') ?? now() + 3600 },
     };
+    this.deps.onRateLimit?.();
+  }
+
+  /**
+   * Forgets the tokenless rate limit, once requests are made with a token:
+   * it no longer applies to them.
+   */
+  private forgetRateLimit(): void {
+    if (!this.lastRateLimit) return;
+    this.lastRateLimit = undefined;
     this.deps.onRateLimit?.();
   }
 

@@ -241,3 +241,30 @@ test('status, unreachable archive, save', async () => {
     globalThis.fetch = failing;
   }
 });
+
+// The tokenless rate limit is shown only while it applies: not once a token
+// is set, nor for another archive than the current one.
+test('rate limit forgotten with a token, or another archive', async () => {
+  reset();
+  let token: string | undefined;
+  let archiveUrl = 'https://archive.example.org';
+  let updates = 0;
+  const archive = new HttpArchiveApi({ archiveUrl: () => archiveUrl, token: async () => token, onRateLimit: () => updates++ });
+  const s = new Swh({ git: new Git(), archive });
+
+  await archive.known(['swh:1:cnt:' + '0'.repeat(40)]);
+  assert.equal(s.rateLimitText(), '20/120');
+  assert.equal(updates, 1);
+
+  // another archive: its rate limit is not known yet
+  archiveUrl = 'https://other.example.org';
+  assert.equal(s.rateLimitText(), undefined);
+  archiveUrl = 'https://archive.example.org';
+  assert.equal(s.rateLimitText(), '20/120');
+
+  // with a token, the tokenless rate limit no longer applies
+  token = 'secret';
+  await archive.known(['swh:1:cnt:' + '1'.repeat(40)]);
+  assert.equal(s.rateLimitText(), undefined);
+  assert.equal(updates, 2);
+});
