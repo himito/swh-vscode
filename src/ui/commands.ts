@@ -25,6 +25,7 @@ import {
   isPublicOrigin,
   normalizeOrigin,
   originBibtex,
+  parseOrigin,
   type OriginInfo,
   qualifiers,
   shortHash,
@@ -87,6 +88,22 @@ export type Target = {
  */
 export type ArchiveChangeHandler = () => void;
 
+/**
+ * Checks a repository URL as the user types it.
+ *
+ * @param input - The text of the input box.
+ * @returns Why it is not a valid repository URL, or `undefined` when it is.
+ */
+function originInputError(input: string): Maybe<string> {
+  try {
+    parseOrigin(input);
+    return undefined;
+  } catch (e) {
+    if (e instanceof UserError) return e.message;
+    throw e;
+  }
+}
+
 /** Implements the extension's commands. */
 export class Commands {
   /**
@@ -144,16 +161,13 @@ export class Commands {
    * Asks the user for the URL of a public repository.
    *
    * @remarks
-   * A URL without a scheme, like `github.com/owner/repo`, gets `https://`.
-   * The URL is normalized as the archive names origins (see
-   * {@link normalizeOrigin}).
+   * The input box checks the URL as it is typed (see {@link core!parseOrigin}),
+   * so it cannot be accepted until it is a valid repository URL.
    *
    * @param prompt - The prompt of the input box.
    * @param def - The URL proposed in the input box.
    * @returns The normalized origin.
    * @throws {@link core!Cancelled} when the user dismisses the input box.
-   * @throws {@link core!UserError} when the input is empty, looks like a web page
-   * rather than a repository, or is not a public URL.
    */
   async readOrigin(prompt: string, def?: string): Promise<string> {
     const input = await vscode.window.showInputBox({
@@ -161,15 +175,10 @@ export class Commands {
       value: def,
       placeHolder: 'https://github.com/owner/repository',
       ignoreFocusOut: true,
+      validateInput: originInputError,
     });
     if (input === undefined) throw new Cancelled();
-    const url = input.trim();
-    if (!url) throw new UserError('No origin');
-    // a typo, or a web page rather than a repository
-    if (/[\s?#]/.test(url)) throw new UserError(`Not a repository URL: ${url}`);
-    const origin = normalizeOrigin(/^[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)+\//u.test(url) ? 'https://' + url : url);
-    if (!isPublicOrigin(origin)) throw new UserError(`Not a public repository URL: ${url}`);
-    return origin;
+    return parseOrigin(input);
   }
 
   /**
@@ -183,7 +192,6 @@ export class Commands {
    * @param force - Whether to ask even when there is a public origin here.
    * @returns The origin asked for, or `undefined` to use the current repository.
    * @throws {@link core!Cancelled} when the user dismisses the input box.
-   * @throws {@link core!UserError} when the URL entered is not valid, see {@link Commands.readOrigin}.
    */
   async originArg(verb: string, force: boolean): Promise<Maybe<string>> {
     const local = await this.localOrigin();

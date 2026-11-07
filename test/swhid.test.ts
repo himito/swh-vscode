@@ -21,11 +21,13 @@ import {
   normalizeOrigin,
   originCandidates,
   originName,
+  parseOrigin,
   pathOrigin,
   qualifiers,
   qualify,
   scanSummary,
   shortSwhid,
+  UserError,
 } from '../src/core';
 
 // Git remote URLs of every form become the URLs the archive knows origins by.
@@ -48,6 +50,27 @@ test('normalizeOrigin', () => {
   for (const [url, origin] of cases) assert.equal(normalizeOrigin(url), origin, url);
   assert.deepEqual(originCandidates('git@h.org:a/b'), ['https://h.org/a/b', 'https://h.org/a/b.git']);
   assert.deepEqual(originCandidates('/srv/repo'), ['/srv/repo']);
+});
+
+// Repository URLs typed by the user become origins; anything else is refused.
+test('parseOrigin', () => {
+  const ok: Array<[string, string]> = [
+    ['github.com/bzg/swh.el', 'https://github.com/bzg/swh.el'],
+    ['  https://github.com/bzg/swh.el.git/ ', 'https://github.com/bzg/swh.el'],
+    ['git@github.com:bzg/swh.el.git', 'https://github.com/bzg/swh.el'],
+    ['gitlab.inria.fr/a/b', 'https://gitlab.inria.fr/a/b'],
+  ];
+  for (const [input, origin] of ok) assert.equal(parseOrigin(input), origin, input);
+  const bad: Array<[string, RegExp]> = [
+    ['   ', /^No origin$/],
+    ['https://github.com/bzg/swh.el?tab=readme', /^Not a repository URL/],
+    ['https://github.com/a b', /^Not a repository URL/],
+    ['/srv/git/repo', /^Not a public repository URL/],
+    ['file:///srv/git/repo', /^Not a public repository URL/],
+  ];
+  for (const [input, message] of bad) {
+    assert.throws(() => parseOrigin(input), (e: unknown) => e instanceof UserError && message.test(e.message), input);
+  }
 });
 
 // Qualifier values are percent-encoded as swh.model and swhid-clj encode

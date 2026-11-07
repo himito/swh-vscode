@@ -226,6 +226,42 @@ export function normalizeOrigin(url: string): string {
 export const isPublicOrigin = (origin: string | undefined | null): origin is string =>
   !!origin && /^https?:\/\//i.test(origin);
 
+/** A host name followed by a path, without a scheme: `github.com/owner/repo`. */
+const SCHEMELESS_URL = /^[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)+\//u;
+
+/** Characters no repository URL holds: blanks (a typo), a query or a fragment (a web page). */
+const NON_REPOSITORY_CHARS = /[\s?#]/;
+
+/**
+ * Parses a repository URL typed by the user into an origin.
+ *
+ * @remarks
+ * Surrounding blanks are ignored, and a URL without a scheme gets `https://`.
+ * The URL is then normalized as the archive names origins (see
+ * {@link normalizeOrigin}).
+ *
+ * @param input - What the user typed.
+ * @returns The normalized origin.
+ * @throws {@link UserError} when the input is empty, looks like a web page
+ * rather than a repository, or is not a public URL.
+ *
+ * @example
+ * ```ts
+ * parseOrigin(' github.com/bzg/swh.el ');     // 'https://github.com/bzg/swh.el'
+ * parseOrigin('git@github.com:bzg/swh.el');   // 'https://github.com/bzg/swh.el'
+ * parseOrigin('https://github.com/bzg?tab=1'); // throws
+ * ```
+ */
+export function parseOrigin(input: string): string {
+  const url = input.trim();
+  if (!url) throw new UserError('No origin');
+  if (NON_REPOSITORY_CHARS.test(url)) throw new UserError(`Not a repository URL: ${url}`);
+
+  const origin = normalizeOrigin(SCHEMELESS_URL.test(url) ? `https://${url}` : url);
+  if (!isPublicOrigin(origin)) throw new UserError(`Not a public repository URL: ${url}`);
+  return origin;
+}
+
 /**
  * Gives the origin URLs to look up in the archive for a remote URL.
  *
