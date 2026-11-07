@@ -14,7 +14,7 @@
 import * as vscode from 'vscode';
 import { Cancelled, isPublicOrigin, type Maybe, parseOrigin, type Swh, UserError } from '#core';
 import type { Reports } from '../reports';
-import { ask, config, fileEditor, realCurrentDir, realpath, selectionLines } from '../helpers';
+import { ask, fileEditor, realCurrentDir, realpath, selectionLines, withoutContext } from '../helpers';
 
 /**
  * The options a SWHID command accepts when not run on a `Uri`.
@@ -96,11 +96,6 @@ export class CommandContext {
     readonly reports: Reports,
     readonly onArchiveChange: ArchiveChangeHandler,
   ) { }
-
-  /** The archive's web root, from the `swh.archiveUrl` setting. */
-  get archiveUrl(): string {
-    return config().get<string>('archiveUrl', 'https://archive.softwareheritage.org');
-  }
 
   /**
    * The root of the Git repository of the current directory.
@@ -267,7 +262,7 @@ export class CommandContext {
    */
   bare(arg: CommandArg): boolean {
     if (arg && !(arg instanceof vscode.Uri) && typeof arg.bare === 'boolean') return arg.bare;
-    return config().get<boolean>('swhidWithoutContext', false);
+    return withoutContext();
   }
 
   /**

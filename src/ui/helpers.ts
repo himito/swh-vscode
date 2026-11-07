@@ -25,6 +25,38 @@ import { lineRange, type Maybe, UserError } from '#core';
  */
 export const config = () => vscode.workspace.getConfiguration('swh');
 
+/** The name, in the `swh` section, of the setting of the archive's web root: `swh.archiveUrl`. */
+export const ARCHIVE_URL_SETTING = 'archiveUrl';
+
+/** The archive's web root when `swh.archiveUrl` is not set: Software Heritage's own. */
+export const DEFAULT_ARCHIVE_URL = 'https://archive.softwareheritage.org';
+
+/**
+ * The archive's web root, as the `swh.archiveUrl` setting says.
+ *
+ * @returns The URL, e.g. `https://archive.softwareheritage.org`;
+ * {@link DEFAULT_ARCHIVE_URL} when it is not set.
+ */
+export function archiveUrl(): string {
+  return config().get<string>(ARCHIVE_URL_SETTING, DEFAULT_ARCHIVE_URL);
+}
+
+/**
+ * The name, in the `swh` section, of the setting that makes the SWHID
+ * commands give bare SWHIDs: `swh.swhidWithoutContext`.
+ */
+export const WITHOUT_CONTEXT_SETTING = 'swhidWithoutContext';
+
+/**
+ * Whether the SWHID commands give bare SWHIDs, without their context
+ * qualifiers, as the `swh.swhidWithoutContext` setting says.
+ *
+ * @returns The setting; `false` when it is not set.
+ */
+export function withoutContext(): boolean {
+  return config().get<boolean>(WITHOUT_CONTEXT_SETTING, false);
+}
+
 /**
  * Shows an information message, without waiting for it to be dismissed.
  *

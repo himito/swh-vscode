@@ -19,7 +19,7 @@
 import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
 import { core, isPublicOrigin, type Maybe, RATE_LIMIT_MESSAGE, Swh } from '#core';
-import { config, fileEditor, realCurrentDir } from './helpers';
+import { ARCHIVE_URL_SETTING, config, fileEditor, realCurrentDir } from './helpers';
 
 /**
  * The archival status of a file or directory.
@@ -126,7 +126,7 @@ export class StatusBar implements vscode.Disposable {
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.update()),
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('swh.archiveUrl')) {
+        if (e.affectsConfiguration(`swh.${ARCHIVE_URL_SETTING}`)) {
           // another archive: none of the previous answers hold
           this.swh.forgetAll();
           this.forget();

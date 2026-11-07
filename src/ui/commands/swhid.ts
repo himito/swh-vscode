@@ -8,7 +8,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { bibtex, browseUrl, citationWhat, isPublicOrigin, type Maybe, normalizeOrigin, qualifiers, shortHash, type SwhidInfo } from '#core';
-import { ask, busy, info, openUrl } from '../helpers';
+import { archiveUrl, ask, busy, info, openUrl } from '../helpers';
 import type { ArchiveCommands } from './archive';
 import type { CommandArg, CommandContext, Target } from './context';
 
@@ -125,7 +125,7 @@ export class SwhidCommands {
     );
 
     if (what === 'open' && swhidInfo.archived) {
-      await openUrl(browseUrl(this.ctx.archiveUrl, text));
+      await openUrl(browseUrl(archiveUrl(), text));
       info('Opening in the Software Heritage archive');
       return text;
     }
@@ -165,9 +165,9 @@ export class SwhidCommands {
     const swhid = bare ? bareSwhid(swhidInfo.core, lines) : swhidInfo.swhid;
     switch (what) {
       case 'link':
-        return { text: browseUrl(this.ctx.archiveUrl, swhid), label: bare ? 'permalink w/o context' : 'SWH archive permalink' };
+        return { text: browseUrl(archiveUrl(), swhid), label: bare ? 'permalink w/o context' : 'SWH archive permalink' };
       case 'markdown':
-        return { text: markdownLink(targetPath, lines, browseUrl(this.ctx.archiveUrl, swhid)), label: 'Markdown link to the SWH archive' };
+        return { text: markdownLink(targetPath, lines, browseUrl(archiveUrl(), swhid)), label: 'Markdown link to the SWH archive' };
       default:
         // not archived, open opens nothing and archived finds no version: the SWHID is copied instead
         return { text: swhid, label: swhidLabel(bare, swhidInfo.archived && what === 'archived') };

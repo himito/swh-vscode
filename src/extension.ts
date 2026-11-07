@@ -17,6 +17,7 @@ import * as vscode from 'vscode';
 import { Git, HttpArchiveApi, type Maybe, type ScanItem, Swh } from '#core';
 import {
   ApiToken,
+  archiveUrl,
   CommandArg,
   Commands,
   config,
@@ -50,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
   // the backend, on Git and on the archive's Web API, configured by the settings
   let statusBar: Maybe<StatusBar>;
   const archive = new HttpArchiveApi({
-    archiveUrl: () => config().get<string>('archiveUrl', 'https://archive.softwareheritage.org'),
+    archiveUrl,
     token: () => apiToken.get(),
     onRateLimit: () => statusBar?.render(),
   });

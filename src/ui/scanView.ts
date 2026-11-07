@@ -18,7 +18,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { browseUrl, buildScan, type Maybe, Scan, ScanItem, scanSummary, shortSwhid, Swh, typeOf, UserError } from '#core';
-import { config, info, openUrl } from './helpers';
+import { archiveUrl, info, openUrl } from './helpers';
 import { openSwhidUri } from './reports';
 
 /** The icon and its theme color for each scan status: a codicon name and a theme color id. */
@@ -78,10 +78,6 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
     for (const d of this.disposables) d.dispose();
   }
 
-  /** The archive's web root, from the `swh.archiveUrl` setting. */
-  private get archiveUrl() {
-    return config().get<string>('archiveUrl', 'https://archive.softwareheritage.org');
-  }
 
   /**
    * The children of an item, for VS Code.
@@ -216,7 +212,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * @throws {@link core!UserError} when no item is given or selected.
    */
   async openInArchive(arg?: ScanItem) {
-    await openUrl(browseUrl(this.archiveUrl, this.item(arg).swhid));
+    await openUrl(browseUrl(archiveUrl(), this.item(arg).swhid));
   }
 
   /**

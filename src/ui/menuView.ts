@@ -15,7 +15,7 @@
  */
 
 import * as vscode from 'vscode';
-import { config } from './helpers';
+import { config, WITHOUT_CONTEXT_SETTING, withoutContext } from './helpers';
 import { MENU, type MenuEntry, type MenuGroup } from './menu';
 import type { Maybe } from '#core';
 
@@ -44,10 +44,10 @@ function isGroup(node: MenuNode): node is MenuGroup {
  * @param value - Whether to copy SWHIDs without their context qualifiers.
  */
 async function setWithoutContext(value: boolean): Promise<void> {
-  const inWorkspace = config().inspect<boolean>('swhidWithoutContext')?.workspaceValue !== undefined;
+  const inWorkspace = config().inspect<boolean>(WITHOUT_CONTEXT_SETTING)?.workspaceValue !== undefined;
   const target = inWorkspace ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
   try {
-    await config().update('swhidWithoutContext', value, target);
+    await config().update(WITHOUT_CONTEXT_SETTING, value, target);
   } catch (e) {
     void vscode.window.showErrorMessage(`Software Heritage: ${(e as Error)?.message ?? e}`);
   }
@@ -79,19 +79,38 @@ function groupItem(group: MenuGroup): vscode.TreeItem {
 function entryItem(entry: MenuEntry): vscode.TreeItem {
   const item = new vscode.TreeItem(entry.label, vscode.TreeItemCollapsibleState.None);
   item.id = `${entry.label}:${entry.command ?? ''}`;
-  item.description = entry.description;
+
   if (entry.icon) item.iconPath = new vscode.ThemeIcon(entry.icon);
-  if (entry.command) {
-    item.command = { command: entry.command, title: entry.label };
-    item.tooltip = entry.description ? `${entry.label}: ${entry.description}` : entry.label;
-  }
-  if (entry.toggle) {
-    const bare = config().get<boolean>('swhidWithoutContext', false);
-    item.checkboxState = bare ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
-    item.description = bare ? 'bare SWHIDs' : 'qualified SWHIDs';
-    item.tooltip = 'Whether the SWHID commands give the bare SWHID, without its context (swh.swhidWithoutContext)';
-  }
+  if (entry.toggle) showAsWithoutContextSwitch(item);
+  else showAsCommand(item, entry);
+
   return item;
+}
+
+/**
+ * Shows an entry's command on its tree item: clicking it runs the command.
+ *
+ * @param item - The entry's tree item.
+ * @param entry - The entry.
+ */
+function showAsCommand(item: vscode.TreeItem, entry: MenuEntry): void {
+  item.description = entry.description;
+  if (!entry.command) return;
+  item.command = { command: entry.command, title: entry.label };
+  item.tooltip = entry.description ? `${entry.label}: ${entry.description}` : entry.label;
+}
+
+/**
+ * Shows the *Without context* switch on its tree item: a checkbox, checked
+ * when the setting is on, and a description of the SWHIDs the commands give.
+ *
+ * @param item - The switch's tree item.
+ */
+function showAsWithoutContextSwitch(item: vscode.TreeItem): void {
+  const bare = withoutContext();
+  item.checkboxState = bare ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
+  item.description = bare ? 'bare SWHIDs' : 'qualified SWHIDs';
+  item.tooltip = `Whether the SWHID commands give the bare SWHID, without its context (swh.${WITHOUT_CONTEXT_SETTING})`;
 }
 
 /**
@@ -122,7 +141,7 @@ export class MenuView implements vscode.TreeDataProvider<MenuNode>, vscode.Dispo
         }
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('swh.swhidWithoutContext')) this.emitter.fire(undefined);
+        if (e.affectsConfiguration(`swh.${WITHOUT_CONTEXT_SETTING}`)) this.emitter.fire(undefined);
       }),
     );
   }

@@ -6,9 +6,8 @@
 
 import * as vscode from 'vscode';
 import { browseUrl, isSwhid, type Maybe } from '#core';
-import { config, openUrl } from '../helpers';
+import { archiveUrl, openUrl, withoutContext } from '../helpers';
 import { MENU, type MenuEntry } from '../menu';
-import type { CommandContext } from './context';
 
 /**
  * Checks a SWHID as the user types it.
@@ -80,13 +79,6 @@ function pickMenuItem(bare: boolean): Thenable<Maybe<MenuItem>> {
 /** Implements the other commands: opening a SWHID, and the Quick Pick menu. */
 export class MiscCommands {
   /**
-   * Creates the commands.
-   *
-   * @param ctx - The backend, and what the commands are about.
-   */
-  constructor(private readonly ctx: CommandContext) { }
-
-  /**
    * Opens a SWHID in the archive's web interface.
    *
    * @remarks
@@ -98,7 +90,7 @@ export class MiscCommands {
   async openSwhid(swhid?: string): Promise<void> {
     const toOpen = swhid || (await this.readSwhid());
     if (!toOpen) return;
-    await openUrl(browseUrl(this.ctx.archiveUrl, toOpen));
+    await openUrl(browseUrl(archiveUrl(), toOpen));
   }
 
   /**
@@ -129,7 +121,7 @@ export class MiscCommands {
    * from the `swh.swhidWithoutContext` setting.
    */
   async menu(): Promise<void> {
-    let bare = config().get<boolean>('swhidWithoutContext', false);
+    let bare = withoutContext();
     let pick = await pickMenuItem(bare);
     while (pick?.toggle) {
       bare = !bare;

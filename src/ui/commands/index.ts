@@ -3,8 +3,9 @@
  * citations, and the others.
  *
  * @remarks
- * {@link Commands} builds the groups on one {@link CommandContext}, which
- * finds "where the user is" and holds the backend. Each public method of a
+ * {@link Commands} builds the groups; those that need it share one
+ * {@link CommandContext}, which finds "where the user is" and holds the
+ * backend. Each public method of a
  * group implements one or more commands registered in `extension.ts`, except
  * {@link ArchiveCommands.doSave}, which the SWHID commands also use. They talk
  * to the archive through {@link Swh}, show their results with the helpers of
@@ -57,6 +58,6 @@ export class Commands {
     this.archive = new ArchiveCommands(this.context);
     this.swhid = new SwhidCommands(this.context, this.archive);
     this.citation = new CitationCommands(this.context, this.swhid);
-    this.misc = new MiscCommands(this.context);
+    this.misc = new MiscCommands();
   }
 }

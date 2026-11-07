@@ -190,7 +190,7 @@ Between folders, modules import a folder's `index.ts` through an alias, `#core` 
 
 `Swh` never talks HTTP itself: it asks the archive through the [`ArchiveApi`](src/core/backend/archiveApi.ts) interface, in its own terms (SWHIDs, origins, visits, save requests, citations). [`HttpArchiveApi`](src/core/backend/adapters/httpArchiveApi.ts) implements it over the archive's Web API, and [extension.ts](src/extension.ts) passes it to `Swh`; the tests can pass a fake archive instead. This is the "ports and adapters" (hexagonal) architecture: the interface is the port, its implementations in `adapters/` the adapters. To support another way of reaching the archive, implement `ArchiveApi`; nothing else changes.
 
-The commands are grouped by concern in [src/ui/commands/](src/ui/commands/), one class per group, all built by `Commands` on one shared `CommandContext`. A group gets the others it needs through its constructor: the citations use the SWHID commands, which use the archive commands to send save requests.
+The commands are grouped by concern in [src/ui/commands/](src/ui/commands/), one class per group, all built by `Commands`; the groups that need it share one `CommandContext`. A group gets the others it needs through its constructor: the citations use the SWHID commands, which use the archive commands to send save requests.
 
 ## License
 
