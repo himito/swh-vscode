@@ -1,0 +1,10 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "Software Heritage for VS Code",
+  "entryPoints": ["src/core/index.ts", "src/ui/index.ts", "src/extension.ts"],
+  "out": "docs",
+  "readme": "none",
+  "excludePrivate": false,
+  "excludeProtected": false,
+  "validation": { "notExported": false, "invalidLink": true, "notDocumented": false }
+}

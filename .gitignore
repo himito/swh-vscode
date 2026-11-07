@@ -5,6 +5,9 @@ node_modules/
 out/
 *.tsbuildinfo
 
+# API documentation (npm run docs)
+docs/
+
 # Packaged extension (vsce package)
 *.vsix
 
