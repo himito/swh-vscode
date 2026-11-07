@@ -20,7 +20,7 @@ import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
 import { core, isPublicOrigin, RATE_LIMIT_MESSAGE, Swh } from '../core';
 import type { Maybe } from '../core/types';
-import { config, currentDir, fileEditor } from './helpers';
+import { config, fileEditor, realCurrentDir } from './helpers';
 
 /**
  * The archival status of a file or directory.
@@ -161,7 +161,7 @@ export class StatusBar implements vscode.Disposable {
         p = await fs.realpath(editor.document.uri.fsPath);
         dirty = editor.document.isDirty;
       } else if (!vscode.window.activeTextEditor) {
-        p = await fs.realpath(currentDir());
+        p = await realCurrentDir();
         dir = true;
       } else {
         return undefined;

@@ -154,6 +154,17 @@ export function currentDir(): string {
 }
 
 /**
+ * The directory the user is working in, resolved through symbolic links.
+ *
+ * @returns The canonical path of {@link currentDir}.
+ * @throws {@link core!UserError} when no file on disk is active and no folder
+ * is open, or the directory does not exist.
+ */
+export async function realCurrentDir(): Promise<string> {
+  return realpath(currentDir());
+}
+
+/**
  * The active editor, when it shows a file saved on disk.
  *
  * @returns The active editor, or `undefined` when there is none or it shows

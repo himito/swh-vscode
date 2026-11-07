@@ -33,7 +33,7 @@ import {
   UserError,
 } from '../core';
 import type { Reports } from './reports';
-import { ask, busy, config, currentDir, fileEditor, info, openUrl, realpath, selectionLines } from './helpers';
+import { ask, busy, config, fileEditor, info, openUrl, realCurrentDir, realpath, selectionLines } from './helpers';
 import type { Maybe } from '../core/types';
 
 /**
@@ -50,22 +50,42 @@ import type { Maybe } from '../core/types';
 export type What = 'swhid' | 'link' | 'open' | 'bibtex' | 'archived' | 'markdown';
 
 /**
+ * The options a SWHID command accepts when not run on a `Uri`.
+ *
+ * @remarks
+ * Passed from a keybinding (`"args": { "bare": true }`), the menus, or the
+ * status bar item (`path`).
+ */
+export type CommandOptions = {
+  /** Whether to give the bare SWHID, without its context; overrides `swh.swhidWithoutContext`. */
+  bare?: boolean;
+  /** The path of the file or directory to act on. */
+  path?: string;
+};
+
+/**
  * The argument a SWHID command receives.
  *
  * @remarks
- * A `Uri` when run from the editor's or the Explorer's context menu; options
- * when run from a keybinding (`"args": { "bare": true }`), the menus, or the
- * status bar item (`path`); `undefined` from the Command Palette.
+ * A `Uri` when run from the editor's or the Explorer's context menu;
+ * {@link CommandOptions} from a keybinding, the menus, or the status bar item;
+ * `undefined` from the Command Palette.
  */
-export type CommandArg = vscode.Uri | { bare?: boolean; path?: string } | undefined;
+export type CommandArg = vscode.Uri | CommandOptions | undefined;
 
 /** What a SWHID command is about: a file, possibly some of its lines, or a directory. */
-export interface Target {
+export type Target = {
   /** The real path of the file or directory. */
   path: string;
   /** The selected lines, `"A-B"` or `"A"`, for a file in the active editor. */
   lines?: string;
-}
+};
+
+/**
+ * Called after a save request or a refresh, when what the archive holds may
+ * have changed, e.g. to recheck the status bar.
+ */
+export type ArchiveChangeHandler = () => void;
 
 /** Implements the extension's commands. */
 export class Commands {
@@ -74,21 +94,18 @@ export class Commands {
    *
    * @param swh - The backend that talks to Git and the archive.
    * @param reports - Where the visits and citation reports are shown.
-   * @param onArchiveChange - Called after a save request or a refresh, when
-   * what the archive holds may have changed, e.g. to recheck the status bar.
+   * @param onArchiveChange - Called when what the archive holds may have changed.
    */
   constructor(
     private swh: Swh,
     private reports: Reports,
-    private onArchiveChange: () => void,
-  ) {}
+    private onArchiveChange: ArchiveChangeHandler,
+  ) { }
 
   /** The archive's web root, from the `swh.archiveUrl` setting. */
   private get archiveUrl() {
     return config().get<string>('archiveUrl', 'https://archive.softwareheritage.org');
   }
-
-  // ------------------------------------------------------------ where we are
 
   /**
    * The root of the Git repository of the current directory.
@@ -98,7 +115,7 @@ export class Commands {
    * directory is not inside a Git repository.
    */
   async repoRoot(): Promise<string> {
-    const root = await this.swh.git.root(await realpath(currentDir()));
+    const root = await this.swh.git.root(await realCurrentDir());
     if (!root) throw new UserError('Not inside a Git repository');
     return root;
   }
@@ -111,14 +128,15 @@ export class Commands {
    * URL.
    */
   async localOrigin(): Promise<Maybe<string>> {
-    let dir: string;
+    let root: string;
     try {
-      dir = await realpath(currentDir());
-    } catch {
-      return undefined;
+      root = await this.repoRoot();
+    } catch (e) {
+      if (e instanceof UserError) return undefined;
+      throw e;
     }
-    const root = await this.swh.git.root(dir);
-    const origin = root ? await this.swh.originOf(root) : undefined;
+
+    const origin = await this.swh.originOf(root);
     return isPublicOrigin(origin) ? origin : undefined;
   }
 
@@ -207,7 +225,7 @@ export class Commands {
       // a symbolic link stands for its target
       return { path: await realpath(doc.uri.fsPath), lines: selectionLines(editor) };
     }
-    const dir = await realpath(currentDir());
+    const dir = await realCurrentDir();
     if (!(await this.swh.git.root(dir))) throw new UserError('Not inside a Git repository');
     return { path: dir };
   }
@@ -570,7 +588,7 @@ export class Commands {
     // cmd: the command to run; swhid: whether it takes the bare option; toggle: the switch
     type Item = vscode.QuickPickItem & { cmd?: string; swhid?: boolean; toggle?: boolean };
     const sep = (label: string): Item => ({ label, kind: vscode.QuickPickItemKind.Separator });
-    for (;;) {
+    for (; ;) {
       const items: Item[] = [
         sep('SWH Archive'),
         { label: '$(cloud-upload) Save', description: 'ask SWH to save code now', cmd: 'swh.save' },
