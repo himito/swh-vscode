@@ -4,7 +4,7 @@
  * @remarks
  * {@link MENU} is the one definition of the menu: its groups, and their
  * entries in order. The Menu view (see `menuView.ts`) shows every group in
- * the side bar; the Quick Pick menu (see {@link Commands.menu}) shows the
+ * the side bar; the Quick Pick menu (see {@link MiscCommands.menu}) shows the
  * groups marked {@link MenuGroup.inQuickPick}. Each draws the entries its own
  * way, including the *Without context* switch.
  *

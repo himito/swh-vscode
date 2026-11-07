@@ -28,6 +28,7 @@ import {
   Reports,
   ScanView,
   StatusBar,
+  type SwhidCommands,
   SwhidLinks,
 } from './ui';
 import type { Maybe } from './core/types';
@@ -59,29 +60,29 @@ export function activate(context: vscode.ExtensionContext) {
   const reports = new Reports();
   statusBar = new StatusBar(swh);
   const commands = new Commands(swh, reports, () => statusBar?.forget());
-  const scan = new ScanView(swh, () => commands.repoRoot());
+  const scan = new ScanView(swh, () => commands.context.repoRoot());
 
   registerCommands(context, {
     // the archive: status, visits, save
-    'swh.menu': () => commands.menu(),
-    'swh.status': () => commands.status(),
-    'swh.statusOther': () => commands.status(true),
-    'swh.visits': () => commands.visits(),
-    'swh.visitsOther': () => commands.visits(true),
-    'swh.save': () => commands.save(),
-    'swh.saveOther': () => commands.save(true),
-    'swh.refresh': () => commands.refresh(),
+    'swh.menu': () => commands.misc.menu(),
+    'swh.status': () => commands.archive.status(),
+    'swh.statusOther': () => commands.archive.status(true),
+    'swh.visits': () => commands.archive.visits(),
+    'swh.visitsOther': () => commands.archive.visits(true),
+    'swh.save': () => commands.archive.save(),
+    'swh.saveOther': () => commands.archive.save(true),
+    'swh.refresh': () => commands.archive.refresh(),
 
     // SWHIDs and citations: a Uri from a context menu, or options from a keybinding or the menu
-    'swh.swhidCopy': (arg?: CommandArg) => commands.swhidCopy('swhid', arg),
-    'swh.swhidCopyArchived': (arg?: CommandArg) => commands.swhidCopy('archived', arg),
-    'swh.swhidCopyLink': (arg?: CommandArg) => commands.swhidCopy('link', arg),
-    'swh.swhidCopyMarkdown': (arg?: CommandArg) => commands.swhidCopy('markdown', arg),
-    'swh.swhidOpen': (arg?: CommandArg) => commands.swhidCopy('open', arg),
-    'swh.cite': (arg?: CommandArg) => commands.cite(false, arg),
-    'swh.citeOther': () => commands.cite(true),
-    'swh.openSwhid': (swhid?: string) => commands.openSwhid(swhid),
-    'swh.statusBarCopy': () => copyStatusBarSwhid(commands, statusBar),
+    'swh.swhidCopy': (arg?: CommandArg) => commands.swhid.swhidCopy('swhid', arg),
+    'swh.swhidCopyArchived': (arg?: CommandArg) => commands.swhid.swhidCopy('archived', arg),
+    'swh.swhidCopyLink': (arg?: CommandArg) => commands.swhid.swhidCopy('link', arg),
+    'swh.swhidCopyMarkdown': (arg?: CommandArg) => commands.swhid.swhidCopy('markdown', arg),
+    'swh.swhidOpen': (arg?: CommandArg) => commands.swhid.swhidCopy('open', arg),
+    'swh.cite': (arg?: CommandArg) => commands.citation.cite(false, arg),
+    'swh.citeOther': () => commands.citation.cite(true),
+    'swh.openSwhid': (swhid?: string) => commands.misc.openSwhid(swhid),
+    'swh.statusBarCopy': () => copyStatusBarSwhid(commands.swhid, statusBar),
 
     // the API token
     'swh.setToken': () => setToken(apiToken),
@@ -114,15 +115,15 @@ export function activate(context: vscode.ExtensionContext) {
  * would, with the selected lines. A folder is shown when no file editor is
  * open, so it must be given by its path.
  *
- * @param commands - The commands, which copy the SWHID.
+ * @param swhid - The SWHID commands, which copy the SWHID.
  * @param statusBar - The status bar item; nothing is copied when it shows nothing.
  */
-async function copyStatusBarSwhid(commands: Commands, statusBar: Maybe<StatusBar>): Promise<void> {
+async function copyStatusBarSwhid(swhid: SwhidCommands, statusBar: Maybe<StatusBar>): Promise<void> {
   const shown = statusBar?.current;
   if (!shown) return;
 
   const target: CommandArg = shown.dir ? { path: shown.path } : undefined;
-  await commands.swhidCopy('swhid', target);
+  await swhid.swhidCopy('swhid', target);
 }
 
 /**
