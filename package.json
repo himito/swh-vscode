@@ -3,7 +3,7 @@
   "displayName": "Software Heritage",
   "description": "Software Heritage client: archive your code, cite it with a SWHID, and see which of your files are already archived.",
   "version": "0.1.0",
-  "publisher": "swh-vscode",
+  "publisher": "himito",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
