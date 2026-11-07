@@ -22,6 +22,9 @@ import type { Maybe } from '#core';
 /** A node of the Menu view's tree: a group, or one of its entries. */
 type MenuNode = MenuGroup | MenuEntry;
 
+/** The id of the Menu view, as `package.json` declares it. */
+const MENU_VIEW_ID = 'swh.actions';
+
 /**
  * Whether a node of the tree is a group.
  *
@@ -123,27 +126,41 @@ function showAsWithoutContextSwitch(item: vscode.TreeItem): void {
  */
 export class MenuView implements vscode.TreeDataProvider<MenuNode>, vscode.Disposable {
   /** Fires when the menu must be redrawn: the switch's setting changed. */
-  private emitter = new vscode.EventEmitter<Maybe<MenuNode>>();
+  private readonly emitter = new vscode.EventEmitter<Maybe<MenuNode>>();
   /** The event VS Code listens to, to redraw the menu. */
   readonly onDidChangeTreeData = this.emitter.event;
   /** The view and the event listeners, disposed of with the provider. */
-  private disposables: vscode.Disposable[] = [];
+  private readonly disposables: vscode.Disposable[] = [];
 
   /** Create the Menu view, and follow its checkbox and the setting it switches. */
   constructor() {
-    const view = vscode.window.createTreeView('swh.actions', { treeDataProvider: this });
+    const view = vscode.window.createTreeView(MENU_VIEW_ID, { treeDataProvider: this });
     this.disposables.push(
       view,
       this.emitter,
-      view.onDidChangeCheckboxState(async (e) => {
-        for (const [node, state] of e.items) {
-          if (!isGroup(node) && node.toggle) await setWithoutContext(state === vscode.TreeItemCheckboxState.Checked);
-        }
-      }),
-      vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration(`swh.${WITHOUT_CONTEXT_SETTING}`)) this.emitter.fire(undefined);
-      }),
+      view.onDidChangeCheckboxState((e) => this.onCheckboxChange(e)),
+      vscode.workspace.onDidChangeConfiguration((e) => this.onConfigurationChange(e)),
     );
+  }
+
+  /**
+   * Writes the *Without context* setting when its checkbox is clicked.
+   *
+   * @param e - The checkboxes that changed, and their new states.
+   */
+  private async onCheckboxChange(e: vscode.TreeCheckboxChangeEvent<MenuNode>): Promise<void> {
+    const toggle = e.items.find(([node]) => !isGroup(node) && node.toggle);
+    if (toggle) await setWithoutContext(toggle[1] === vscode.TreeItemCheckboxState.Checked);
+  }
+
+  /**
+   * Redraws the menu when the *Without context* setting changes, wherever
+   * it is changed, so that the checkbox always shows it.
+   *
+   * @param e - What changed in the settings.
+   */
+  private onConfigurationChange(e: vscode.ConfigurationChangeEvent): void {
+    if (e.affectsConfiguration(`swh.${WITHOUT_CONTEXT_SETTING}`)) this.emitter.fire(undefined);
   }
 
   /** Dispose of the view and its listeners. */
