@@ -13,7 +13,7 @@
  * @packageDocumentation
  */
 
-import { UserError } from './http';
+import { UserError } from './errors';
 import type { Maybe } from './types';
 
 /**

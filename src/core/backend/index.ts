@@ -3,21 +3,31 @@
  * or Git, behind the single class {@link Swh}.
  *
  * @remarks
- * SWHIDs are computed with Git, and the archive's Web API (`/api/1`) is
- * asked whether it holds them.
+ * SWHIDs are computed with Git, and the archive is asked whether it holds
+ * them.
+ *
+ * The backend talks to the archive through an interface, {@link ArchiveApi},
+ * in its own terms; it never sees HTTP. {@link HttpArchiveApi} (in
+ * `adapters/`) implements the interface over the archive's Web API
+ * (`/api/1`).
+ *
+ * {@link Swh} is built in layers, each file's class extending the one
+ * before: `known.ts` (Git, the archive, which SWHIDs it holds) →
+ * `origins.ts` → `swhids.ts` → {@link Swh} here.
  *
  * Answers that may change are remembered for a while (see `MEMO_TTL`):
  * what the archive holds stays so for the session, what it does not hold
  * is asked again after ten minutes.
  *
- * This module must not import `vscode`: it receives its settings and
- * callbacks through {@link SwhDeps}, which lets the unit tests run it with
- * Node alone.
+ * This module must not import `vscode`: {@link Swh} receives Git and the
+ * archive through {@link SwhDeps}, and {@link HttpArchiveApi} its settings
+ * and callbacks through {@link HttpArchiveDeps}. This lets the unit tests run
+ * it with Node alone, on a fake archive or a fake `fetch`.
  *
  * @packageDocumentation
  */
 
-import { UserError } from '../http';
+import { UserError } from '../errors';
 import { relativePath } from '../git';
 import { ancestors, core, isPublicOrigin, typeOf } from '../swhid';
 import { forgetNegatives } from './memo';
@@ -25,8 +35,10 @@ import { SwhSwhids } from './swhids';
 import type { TreeNode } from './types';
 import type { Maybe } from '../types';
 
-export { RATE_LIMIT_MESSAGE } from './client';
-export type { OriginInfo, OriginVisits, SaveRequest, SwhDeps, SwhidInfo, Token, TreeNode, Visit } from './types';
+export { HttpArchiveApi, type HttpArchiveDeps, KNOWN_BATCH_SIZE } from './adapters/httpArchiveApi';
+export { type ArchiveApi, type CitationTarget, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from './archiveApi';
+export { VISITS_SHOWN } from './origins';
+export type { CitationAnswer, OriginInfo, OriginVisits, SaveRequest, SwhDeps, SwhidInfo, Token, TreeNode, Visit } from './types';
 
 /**
  * The Software Heritage client: archival status, SWHIDs, visits, save

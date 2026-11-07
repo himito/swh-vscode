@@ -14,7 +14,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Git, type ScanItem, Swh } from './core';
+import { Git, HttpArchiveApi, type ScanItem, Swh } from './core';
 import {
   ApiToken,
   CommandArg,
@@ -48,13 +48,16 @@ export function activate(context: vscode.ExtensionContext) {
   const apiToken = new ApiToken(context.secrets);
   context.subscriptions.push(apiToken);
 
-  // the backend, configured by the settings
+  // the backend, on Git and on the archive's Web API, configured by the settings
   let statusBar: Maybe<StatusBar>;
-  const swh = new Swh({
+  const archive = new HttpArchiveApi({
     archiveUrl: () => config().get<string>('archiveUrl', 'https://archive.softwareheritage.org'),
     token: () => apiToken.get(),
     onRateLimit: () => statusBar?.render(),
+  });
+  const swh = new Swh({
     git: new Git(() => config().get<string>('gitPath', 'git') || 'git'),
+    archive,
   });
 
   const reports = new Reports();

@@ -11,49 +11,16 @@
  */
 
 import * as path from 'path';
-import type { Swh, SwhidInfo } from './backend';
-import { is2xx, UserError } from './http';
-import { core, encodeOrigin, hashOf, isPublicOrigin, originName, qualifiers, queryString, shortHash, typeOf } from './swhid';
+import type { ArchiveApi, CitationAnswer, Swh, SwhidInfo } from './backend';
+import { UserError } from './errors';
+import { core, encodeOrigin, hashOf, isPublicOrigin, originName, qualifiers, shortHash, typeOf } from './swhid';
 import type { Maybe } from './types';
-
-/**
- * What the archive answered to a citation request.
- *
- * @remarks
- * - `{ entry }`: the archive's BibTeX entry.
- * - `'no-metadata'`: the archive has no citation metadata for it.
- * - `'failed'`: the archive failed to make one.
- * - `'not-archived'`: the archive was not asked, as it does not hold the code.
- */
-export type CitationAnswer = { entry: string } | 'no-metadata' | 'failed' | 'not-archived';
 
 /**
  * Where a BibTeX entry comes from: `'archive'` for the archive's own, else
  * why it is a minimal one (see {@link CitationAnswer}).
  */
 export type Why = 'archive' | 'no-metadata' | 'failed' | 'not-archived';
-
-/**
- * Asks the archive for a BibTeX entry citing a SWHID or an origin.
- *
- * @param swh - The backend, to send the request.
- * @param target - The SWHID, or with `originP` the origin URL, to cite.
- * @param originP - Whether `target` is an origin URL rather than a SWHID.
- * @returns The archive's entry; `'no-metadata'` when it answers 400 or 404,
- * `'failed'` for any other error.
- * @throws {@link UserError} when the archive cannot be reached, or its rate
- * limit is reached.
- */
-export async function archiveCitation(swh: Swh, target: string, originP = false): Promise<CitationAnswer> {
-  const q = queryString([
-    ['citation_format', 'bibtex'],
-    [originP ? 'origin_url' : 'target_swhid', target],
-  ]);
-  const resp = await swh.api('GET', `/raw-intrinsic-metadata/citation/${originP ? 'origin' : 'swhid'}/?${q}`);
-  if (is2xx(resp) && typeof resp.body?.content === 'string') return { entry: resp.body.content };
-  if (resp.status === 400 || resp.status === 404) return 'no-metadata';
-  return 'failed';
-}
 
 /**
  * Makes the BibTeX entry citing a qualified SWHID.
@@ -65,7 +32,7 @@ export async function archiveCitation(swh: Swh, target: string, originP = false)
  * key made as the archive makes it, e.g. `swh-cnt-67c1849-L1-L3`. Fields
  * without a value are left out.
  *
- * @param answer - What the archive answered, see {@link archiveCitation}.
+ * @param answer - What the archive answered, see {@link ArchiveApi.citation}.
  * @param coreSwhid - The core SWHID cited.
  * @param swhid - The qualified SWHID cited, for the `swhid` field.
  * @param title - The title, e.g. the repository's name.
@@ -128,7 +95,7 @@ export function citation(
  * limit is reached.
  */
 export async function bibtex(swh: Swh, info: SwhidInfo, lines: Maybe<string>, root: Maybe<string>): Promise<[string, Why]> {
-  const answer: CitationAnswer = info.archived ? await archiveCitation(swh, info.swhid) : 'not-archived';
+  const answer: CitationAnswer = info.archived ? await swh.archive.citation({ swhid: info.swhid }) : 'not-archived';
   const origin = info.origin;
   const anchor = qualifiers(info.swhid).anchor;
   const date =
@@ -161,7 +128,8 @@ export async function originBibtex(swh: Swh, origin: string): Promise<[string, W
   if (!info.archived || !info.snapshot) throw new UserError(`Software Heritage has not archived ${origin}`);
   const url = info.origin;
   const c = core('snp', info.snapshot);
-  return citation(await archiveCitation(swh, url, true), c, `${c};origin=${encodeOrigin(url)}`, originName(url), url, info.date);
+  const answer = await swh.archive.citation({ origin: url });
+  return citation(answer, c, `${c};origin=${encodeOrigin(url)}`, originName(url), url, info.date);
 }
 
 /**

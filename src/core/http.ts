@@ -1,5 +1,5 @@
 /**
- * HTTP requests, and the error types the extension uses.
+ * HTTP requests.
  *
  * @remarks
  * Requests go through the global `fetch`, and come back as a {@link Resp}
@@ -19,41 +19,6 @@ import type { Maybe } from './types';
  * A symbol, so that it cannot be confused with any JSON value, `null` included.
  */
 export const NOT_JSON = Symbol('not-json');
-
-/**
- * An error whose message is meant for the user, shown as is.
- *
- * @remarks
- * Throw it for every expected failure (no repository, no remote, archive
- * unreachable, rate limit reached…), with a message that says what went
- * wrong in plain words. Commands show it as a warning; any other error is
- * reported as an unexpected failure.
- */
-export class UserError extends Error {
-  /**
-   * Creates the error.
-   *
-   * @param message - What went wrong, in words for the user.
-   */
-  constructor(message: string) {
-    super(message);
-    this.name = 'UserError';
-  }
-}
-
-/**
- * The error thrown when the user dismisses a prompt.
- *
- * @remarks
- * Commands stop silently on it: there is nothing to report.
- */
-export class Cancelled extends Error {
-  /** Creates the error. */
-  constructor() {
-    super('Cancelled');
-    this.name = 'Cancelled';
-  }
-}
 
 /** An HTTP response, as {@link retrieve} gives it. */
 export type Resp = {

@@ -137,16 +137,20 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   ├── extension.ts     Activation: wires everything and registers the commands
 │   ├── core/            Plain TypeScript, no `vscode` import
 │   │   ├── index.ts     The folder's public API, re-exported
-│   │   ├── backend/     The backend (class Swh): Git and the archive's Web API
-│   │   │   ├── index.ts     Swh itself: scans, refresh, why a file is not archived
-│   │   │   ├── swhids.ts    SWHIDs of files and directories, anchored on archived commits
-│   │   │   ├── origins.ts   Origins, visits, save requests
-│   │   │   ├── known.ts     Which SWHIDs the archive holds
-│   │   │   ├── client.ts    Requests to the archive, the rate limit
-│   │   │   ├── memo.ts      Remembered answers
-│   │   │   └── types.ts     The data it answers with, and what it needs from its host
+│   │   ├── backend/     The backend (class Swh): Git and the Software Heritage archive
+│   │   │   ├── index.ts       Swh itself: scans, refresh, why a file is not archived
+│   │   │   ├── swhids.ts      SWHIDs of files and directories, anchored on archived commits
+│   │   │   ├── origins.ts     Origins, visits, save requests
+│   │   │   ├── known.ts       Which SWHIDs the archive holds
+│   │   │   ├── archiveApi.ts  ArchiveApi: what the backend asks the archive (an interface)
+│   │   │   ├── adapters/      Implementations of ArchiveApi
+│   │   │   │   ├── httpArchiveApi.ts  Over the archive's Web API: requests, token, rate limit
+│   │   │   │   └── json.ts            The archive's JSON answers, checked and mapped
+│   │   │   ├── memo.ts        Remembered answers
+│   │   │   └── types.ts       The data it answers with, and what it needs from its host
 │   │   ├── git.ts       Running Git, and the temporary index copies
-│   │   ├── http.ts      HTTP requests, and the error types
+│   │   ├── http.ts      HTTP requests, through fetch
+│   │   ├── errors.ts    The error types: UserError, Cancelled
 │   │   ├── swhid.ts     SWHIDs, origins and their encodings (pure functions)
 │   │   ├── citation.ts  BibTeX entries
 │   │   ├── scan.ts      The scan as a tree, and its figures (pure functions)
@@ -154,25 +158,38 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   └── ui/              VS Code's side: everything here imports `vscode`
 │       ├── index.ts     The folder's public API, re-exported
 │       ├── apiToken.ts  The API token: the environment's, else the stored one
-│       ├── commands.ts  The commands: status, visits, save, SWHIDs, citations, menu
+│       ├── commands/    The commands, by group (class Commands)
+│       │   ├── index.ts     Commands: builds the groups on one context
+│       │   ├── context.ts   What every group shares: the target, the repository, its origin
+│       │   ├── archive.ts   Status, visits, save requests, refresh
+│       │   ├── swhid.ts     SWHIDs, permalinks, Markdown links
+│       │   ├── citation.ts  BibTeX citations
+│       │   └── misc.ts      Opening a SWHID, the Quick Pick menu
+│       ├── menu.ts      The menu's entries, shared by the Menu view and the Quick Pick menu
 │       ├── menuView.ts  The Menu view
 │       ├── scanView.ts  The Scan view
 │       ├── statusBar.ts The archival status in the status bar
 │       ├── reports.ts   The read-only reports (visits, citations) and the SWHID links
 │       └── helpers.ts   Shared helpers: messages, progress, commands, the current file or folder
 └── test/
-    ├── swhid.test.ts    Unit tests: SWHIDs, origins, citations, the scan model
-    ├── backend.test.ts  Unit tests: the backend on a temporary repository, the archive mocked
-    └── smoke/           Smoke test in a real VS Code
-        ├── run.ts       Downloads VS Code and opens it on a temporary repository
-        └── suite.ts     Runs the commands in the extension host
+    ├── swhid.test.ts        Unit tests: SWHIDs, origins, citations, the scan model
+    ├── json.test.ts         Unit tests: the archive's JSON answers, mapped
+    ├── fakeArchive.test.ts  Unit tests: the backend on a fake ArchiveApi, without HTTP
+    ├── backend.test.ts      Unit tests: the backend on a temporary repository, fetch mocked
+    └── smoke/               Smoke test in a real VS Code
+        ├── run.ts           Downloads VS Code and opens it on a temporary repository
+        └── suite.ts         Runs the commands in the extension host
 ```
 
 `npm test` runs only the `*.test.ts` files, with Node: the smoke test needs VS Code's extension host.
 
 Only [extension.ts](src/extension.ts) and the modules in [src/ui/](src/ui/) import `vscode`. The modules in [src/core/](src/core/) are plain TypeScript, which is why the unit tests can run them with Node alone. Code that works without VS Code goes in `core/`, and the parts that need VS Code go in `ui/`.
 
-Between folders, modules import a folder's `index.ts` (`from '../core'`); within a folder, they import each other directly. `Swh` is built in layers, each file's class extending the one below it: `client` → `known` → `origins` → `swhids` → `Swh`.
+Between folders, modules import a folder's `index.ts` (`from '../core'`); within a folder, they import each other directly. `Swh` is built in layers, each file's class extending the one below it: `known` → `origins` → `swhids` → `Swh`.
+
+`Swh` never talks HTTP itself: it asks the archive through the [`ArchiveApi`](src/core/backend/archiveApi.ts) interface, in its own terms (SWHIDs, origins, visits, save requests, citations). [`HttpArchiveApi`](src/core/backend/adapters/httpArchiveApi.ts) implements it over the archive's Web API, and [extension.ts](src/extension.ts) passes it to `Swh`; the tests can pass a fake archive instead. This is the "ports and adapters" (hexagonal) architecture: the interface is the port, its implementations in `adapters/` the adapters. To support another way of reaching the archive, implement `ArchiveApi`; nothing else changes.
+
+The commands are grouped by concern in [src/ui/commands/](src/ui/commands/), one class per group, all built by `Commands` on one shared `CommandContext`. A group gets the others it needs through its constructor: the citations use the SWHID commands, which use the archive commands to send save requests.
 
 ## License
 

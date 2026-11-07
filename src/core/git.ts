@@ -14,7 +14,7 @@ import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { UserError } from './http';
+import { UserError } from './errors';
 import type { Maybe } from './types';
 
 /** The result of a Git command. */

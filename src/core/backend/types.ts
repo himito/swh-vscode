@@ -6,6 +6,7 @@
 
 import type { Git } from '../git';
 import type { Maybe } from '../types';
+import type { ArchiveApi } from './archiveApi';
 
 /** An API token, or `undefined` to make anonymous requests. */
 export type Token = Maybe<string>;
@@ -88,19 +89,27 @@ export type TreeNode = {
 };
 
 /**
- * What {@link Swh} needs from its host: settings and callbacks.
+ * What the archive answered to a citation request.
  *
  * @remarks
- * The extension passes functions that read VS Code's settings and secret
- * storage; the tests pass fixed values.
+ * - `{ entry }`: the archive's BibTeX entry.
+ * - `'no-metadata'`: the archive has no citation metadata for it.
+ * - `'failed'`: the archive failed to make one.
+ * - `'not-archived'`: the archive was not asked, as it does not hold the code.
+ */
+export type CitationAnswer = { entry: string } | 'no-metadata' | 'failed' | 'not-archived';
+
+/**
+ * What {@link Swh} needs from its host: Git, and the archive.
+ *
+ * @remarks
+ * The extension passes the HTTP implementation of the archive's Web API
+ * (`HttpArchiveApi`) and a Git runner; the tests may pass a fake archive
+ * instead.
  */
 export type SwhDeps = {
-  /** The archive's web root, e.g. `https://archive.softwareheritage.org`; read at each request. */
-  archiveUrl(): string;
-  /** The API token to send with each request. */
-  token(): Promise<Token>;
-  /** Called whenever the tokenless rate limit is updated, see {@link Swh.rateLimit}. */
-  onRateLimit?(): void;
   /** The Git runner to use. */
   git: Git;
+  /** The Software Heritage archive, see {@link ArchiveApi}. */
+  archive: ArchiveApi;
 };

@@ -1,5 +1,5 @@
 /**
- * Unit tests of the adapters from the archive's API answers to the backend's types.
+ * Unit tests of the mapping from the archive's JSON answers to the backend's types (`adapters/json.ts`).
  *
  * @remarks
  * These tests need neither VS Code, Git nor the network. Run them with `npm test`.
@@ -9,7 +9,7 @@
 
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { toSaveRequest, toVisit, toVisits } from '../src/core/backend/adapters';
+import { toCitationEntry, toKnown, toSaveRequest, toVisit, toVisits } from '../src/core/backend/adapters/json';
 import { UserError } from '../src/core';
 
 test('toVisit keeps the fields of a well-formed visit', () => {
@@ -47,4 +47,19 @@ test('toSaveRequest throws when the answer has no status as a string', () => {
   for (const raw of [null, undefined, 'accepted', {}, { save_request_status: 1 }]) {
     assert.throws(() => toSaveRequest('https://example.org/me/repo', raw), UserError);
   }
+});
+
+test('toKnown reads whether each SWHID is known', () => {
+  const known = toKnown({ 'swh:1:cnt:a': { known: true }, 'swh:1:cnt:b': { known: false }, 'swh:1:cnt:c': null, 'swh:1:cnt:d': { known: 'yes' } });
+  assert.deepEqual([...known], [['swh:1:cnt:a', true], ['swh:1:cnt:b', false], ['swh:1:cnt:c', false], ['swh:1:cnt:d', false]]);
+  assert.deepEqual([...toKnown({})], []);
+});
+
+test('toKnown throws when the answer is not an object', () => {
+  for (const raw of [null, undefined, [], 'known']) assert.throws(() => toKnown(raw), UserError);
+});
+
+test('toCitationEntry gives the entry, if any', () => {
+  assert.equal(toCitationEntry({ content: '@software{x}' }), '@software{x}');
+  for (const raw of [null, undefined, {}, { content: 1 }, ['@software{x}']]) assert.equal(toCitationEntry(raw), undefined);
 });

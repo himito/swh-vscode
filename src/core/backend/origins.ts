@@ -1,17 +1,19 @@
 /**
- * The third layer of {@link Swh}: repositories' origins, their visits, and
+ * The second layer of {@link Swh}: repositories' origins, their visits, and
  * save requests.
  *
  * @packageDocumentation
  */
 
-import { UserError } from '../http';
-import { core, isPublicOrigin, normalizeOrigin, originCandidates, pathOrigin } from '../swhid';
+import { UserError } from '../errors';
+import { core, isPublicOrigin, normalizeOrigin, originCandidates } from '../swhid';
 import { forgetNegatives, fresh, Memo, MEMO_TTL, memoPut } from './memo';
 import { SwhKnown } from './known';
-import { toSaveRequest, toVisit, toVisits } from './adapters';
 import type { OriginInfo, OriginVisits, SaveRequest, Visit } from './types';
 import type { Maybe } from '../types';
+
+/** How many of an origin's latest visits {@link Swh.visits} gives. */
+export const VISITS_SHOWN = 10;
 
 /** Origins, visits and save requests; see {@link Swh}. */
 export class SwhOrigins extends SwhKnown {
@@ -57,14 +59,13 @@ export class SwhOrigins extends SwhKnown {
    * @param urls - Candidate origin URLs, tried in order.
    * @returns `[url, visit]` for the first archived URL, or `null` when the
    * archive holds none of them; `visit` is `undefined` when the archive's
-   * answer is malformed, see `toVisit`.
-   * @throws {@link UserError} when the archive cannot be reached or answers
-   * an error other than 404.
+   * description of it is unusable.
+   * @throws {@link UserError} as {@link ArchiveApi.latestVisit} does.
    */
   private async latestVisit(urls: string[]): Promise<[string, Maybe<Visit>] | null> {
     for (const url of urls) {
-      const resp = await this.api('GET', `/origin/${pathOrigin(url)}/visit/latest/?require_snapshot=true`);
-      if (resp.status !== 404) return [url, toVisit(this.apiBody(resp, "the origin's visits"))];
+      const latest = await this.archive.latestVisit(url);
+      if (latest.archived) return [url, latest.visit];
     }
     return null;
   }
@@ -123,16 +124,15 @@ export class SwhOrigins extends SwhKnown {
   }
 
   /**
-   * The last ten visits of an origin.
+   * The last {@link VISITS_SHOWN} visits of an origin.
    *
    * @param info - The origin's status; a non-archived origin has no visits, and the archive is not asked.
-   * @returns The origin URL and its visits, most recent first; see `toVisits`.
-   * @throws {@link UserError} when the archive cannot answer, or its answer is not a list.
+   * @returns The origin URL and its visits, most recent first.
+   * @throws {@link UserError} as {@link ArchiveApi.visits} does.
    */
   private async originVisits(info: OriginInfo): Promise<OriginVisits> {
     if (!info.archived) return { origin: info.origin, visits: [] };
-    const resp = await this.api('GET', `/origin/${pathOrigin(info.origin)}/visits/?per_page=10`);
-    return { origin: info.origin, visits: toVisits(this.apiBody(resp, "the origin's visits")) };
+    return { origin: info.origin, visits: await this.archive.visits(info.origin, VISITS_SHOWN) };
   }
 
   /**
@@ -216,17 +216,18 @@ export class SwhOrigins extends SwhKnown {
    * Ask the archive to save a public repository now ("Save Code Now").
    *
    * @param origin - The repository's public URL.
-   * @returns The save request; see `toSaveRequest`.
-   * @throws {@link UserError} when `origin` is not public, or the archive
-   * refuses, cannot answer, or answers without a status.
+   * @returns The save request, as the archive answered it.
+   * @throws {@link UserError} when `origin` is not public, or as
+   * {@link ArchiveApi.save} does.
    */
   async saveOrigin(origin: string): Promise<SaveRequest> {
     if (!isPublicOrigin(origin)) throw new UserError('The origin is not a public URL');
-    const resp = await this.api('POST', `/origin/save/git/url/${pathOrigin(origin)}/`);
-    const body = this.apiBody(resp, 'the save request');
-    // the request is sent: forget the stale answers even if this one is malformed
-    this.forgetBeforeSave(origin);
-    return toSaveRequest(origin, body);
+    try {
+      return await this.archive.save(origin);
+    } finally {
+      // the request may have reached the archive even when its answer is an error
+      this.forgetBeforeSave(origin);
+    }
   }
 
   /**

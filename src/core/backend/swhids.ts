@@ -1,5 +1,5 @@
 /**
- * The fourth layer of {@link Swh}: the SWHIDs of files and directories,
+ * The third layer of {@link Swh}: the SWHIDs of files and directories,
  * computed with Git and anchored on archived commits.
  *
  * @packageDocumentation
@@ -8,7 +8,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { relativePath } from '../git';
-import { UserError } from '../http';
+import { UserError } from '../errors';
 import { core, hashOf, isPublicOrigin, qualify } from '../swhid';
 import { memoPut, uniq } from './memo';
 import { SwhOrigins } from './origins';

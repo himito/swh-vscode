@@ -1,16 +1,21 @@
 /**
- * The second layer of {@link Swh}: which SWHIDs the archive holds.
+ * The first layer of {@link Swh}: Git and the archive, and which SWHIDs the archive holds.
  *
  * @packageDocumentation
  */
 
-import { Memo, memoGet, memoPut, partition, uniq, UNKNOWN } from './memo';
-import { SwhClient } from './client';
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Git } from '../git';
+import type { Maybe } from '../types';
+import { Memo, memoGet, memoPut, now, uniq, UNKNOWN } from './memo';
+import type { ArchiveApi } from './archiveApi';
+import type { SwhDeps } from './types';
 
 /** Which SWHIDs the archive holds, remembered; see {@link Swh}. */
-export class SwhKnown extends SwhClient {
+export class SwhKnown {
+  /** The Git runner, shared with the rest of the extension. */
+  readonly git: Git;
+  /** The Software Heritage archive, see {@link ArchiveApi}. */
+  readonly archive: ArchiveApi;
   /** SWHID → whether the archive holds it; see `memoGet`. */
   protected knownMemo: Memo<boolean> = new Map();
   /**
@@ -18,6 +23,27 @@ export class SwhKnown extends SwhClient {
    * may bring an answer from before the change, which is then not stored.
    */
   protected memoEpoch = 0;
+
+  /**
+   * Creates the backend.
+   *
+   * @param deps - Git, and the archive.
+   */
+  constructor(deps: SwhDeps) {
+    this.git = deps.git;
+    this.archive = deps.archive;
+  }
+
+  /**
+   * The archive's tokenless rate limit, for display.
+   *
+   * @returns `used/limit`, e.g. `48/120`, or `undefined` when not known or
+   * when its window has ended.
+   */
+  rateLimitText(): Maybe<string> {
+    const r = this.archive.rateLimit();
+    return r && now() < r.reset ? `${r.used}/${r.limit}` : undefined;
+  }
 
   /**
    * Whether the archive is known to hold a SWHID, without asking it.
@@ -33,24 +59,20 @@ export class SwhKnown extends SwhClient {
    * Ask the archive which SWHIDs it holds, for those not remembered yet.
    *
    * @remarks
-   * Uses the `/known/` endpoint, 1000 SWHIDs per request; the answers go to
-   * the memo, where {@link Swh.knownP} reads them. An answer that arrives
-   * after the memo forgot answers (see {@link Swh.refresh}) is not stored.
+   * The answers go to the memo, where {@link Swh.knownP} reads them. Answers
+   * that arrive after the memo forgot answers (see {@link Swh.refresh}) are
+   * not stored.
    *
    * @param swhids - Core SWHIDs; duplicates are asked once.
-   * @throws {@link UserError} when the archive cannot be reached, is
-   * rate-limited, or answers an error.
+   * @throws {@link UserError} as {@link ArchiveApi.known} does.
    */
   async rememberKnown(swhids: string[]): Promise<void> {
     const unknown = uniq(swhids).filter((s) => memoGet(this.knownMemo, s) === UNKNOWN);
-    for (const batch of partition(unknown, 1000)) {
-      const epoch = this.memoEpoch;
-      const body = this.apiBody(await this.api('POST', '/known/', JSON.stringify(batch)), 'the SWHID lookup');
-      if (epoch !== this.memoEpoch) continue;
-      for (const [swhid, answer] of Object.entries(body ?? {})) {
-        memoPut(this.knownMemo, swhid, (answer as any)?.known === true);
-      }
-    }
+    if (!unknown.length) return;
+    const epoch = this.memoEpoch;
+    const answers = await this.archive.known(unknown);
+    if (epoch !== this.memoEpoch) return;
+    for (const [swhid, known] of answers) memoPut(this.knownMemo, swhid, known);
   }
 
   /**

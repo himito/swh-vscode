@@ -16,7 +16,7 @@ import { execFileSync } from 'child_process';
 import { promises as fs, realpathSync, mkdtempSync, writeFileSync, mkdirSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Git, Swh } from '../src/core';
+import { Git, HttpArchiveApi, Swh } from '../src/core';
 
 /** The temporary Git repository the tests run on, created before them. */
 let dir: string;
@@ -105,9 +105,8 @@ after(async () => {
  */
 function swh(token?: string) {
   return new Swh({
-    archiveUrl: () => 'https://archive.example.org',
-    token: async () => token,
     git: new Git(),
+    archive: new HttpArchiveApi({ archiveUrl: () => 'https://archive.example.org', token: async () => token }),
   });
 }
 
