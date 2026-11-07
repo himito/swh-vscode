@@ -1,8 +1,31 @@
 # Software Heritage for VS Code
 
+[![Release](https://github.com/himito/swh-vscode/actions/workflows/release.yml/badge.svg)](https://github.com/himito/swh-vscode/actions/workflows/release.yml)
+[![GitHub release](https://img.shields.io/github/v/release/himito/swh-vscode?sort=semver)](https://github.com/himito/swh-vscode/releases)
+[![Visual Studio Marketplace](https://badgen.net/vs-marketplace/v/swh-vscode.swh-vscode)](https://marketplace.visualstudio.com/items?itemName=swh-vscode.swh-vscode)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+[![Archived in Software Heritage](https://archive.softwareheritage.org/badge/origin/https://github.com/himito/swh-vscode/)](https://archive.softwareheritage.org/browse/origin/?origin_url=https://github.com/himito/swh-vscode)
+
 A [Software Heritage](https://www.softwareheritage.org) (SWH) client for VS Code. Use it to archive your code, cite it with a [SWHID](https://www.swhid.org), and see which of your files are already archived.
 
 This project is inspired by [swh.el](https://github.com/bzg/swh.el), the Software Heritage client for Emacs.
+
+Install it from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=swh-vscode.swh-vscode), or in VS Code: open the Extensions view, search for *Software Heritage*, and install it. From a terminal: `code --install-extension swh-vscode.swh-vscode`.
+
+## Contents
+
+- [The side bar](#the-side-bar)
+- [Commands](#commands)
+  - [Context or no context](#context-or-no-context)
+  - [Status bar](#status-bar)
+  - [Scan view](#scan-view)
+  - [SWHID links](#swhid-links)
+- [Token or no token](#token-or-no-token)
+- [Settings](#settings)
+- [Requirements](#requirements)
+- [Development](#development)
+  - [Project structure](#project-structure)
+- [License](#license)
 
 ## The side bar
 
@@ -96,6 +119,7 @@ You need VS Code 1.90 or later and `git`. Only local files are supported: remote
 npm install
 npm test        # unit tests, and the Git backend on a temporary repository
 npm run smoke   # runs the commands in a real VS Code
+npm run docs    # the API documentation, as HTML in docs/
 ```
 
 To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce package`.
@@ -105,6 +129,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 ```text
 ├── package.json         The extension manifest: commands, menus, views, settings
 ├── tsconfig.json
+├── typedoc.json         The API documentation's settings (npm run docs)
 ├── assets/
 │   ├── swh-logo.svg     The activity bar icon (monochrome)
 │   └── swh-logo-128.png The extension's icon
@@ -124,15 +149,17 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   │   ├── http.ts      HTTP requests, and the error types
 │   │   ├── swhid.ts     SWHIDs, origins and their encodings (pure functions)
 │   │   ├── citation.ts  BibTeX entries
-│   │   └── scan.ts      The scan as a tree, and its figures (pure functions)
+│   │   ├── scan.ts      The scan as a tree, and its figures (pure functions)
+│   │   └── types.ts     Shared type helpers, e.g. Maybe<T>
 │   └── ui/              VS Code's side: everything here imports `vscode`
 │       ├── index.ts     The folder's public API, re-exported
+│       ├── apiToken.ts  The API token: the environment's, else the stored one
 │       ├── commands.ts  The commands: status, visits, save, SWHIDs, citations, menu
 │       ├── menuView.ts  The Menu view
 │       ├── scanView.ts  The Scan view
 │       ├── statusBar.ts The archival status in the status bar
 │       ├── reports.ts   The read-only reports (visits, citations) and the SWHID links
-│       └── helpers.ts   Shared helpers: messages, progress, the current file or folder
+│       └── helpers.ts   Shared helpers: messages, progress, commands, the current file or folder
 └── test/
     ├── swhid.test.ts    Unit tests: SWHIDs, origins, citations, the scan model
     ├── backend.test.ts  Unit tests: the backend on a temporary repository, the archive mocked
