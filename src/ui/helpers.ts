@@ -98,6 +98,29 @@ export function command<A extends unknown[]>(fn: (...args: A) => Promise<unknown
 }
 
 /**
+ * A command's implementation.
+ *
+ * @remarks
+ * Its arguments come from VS Code untyped: a `Uri` from a context menu, an
+ * item from a tree view, options from a keybinding, or nothing from the
+ * command palette.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type CommandHandler = (...args: any[]) => Promise<unknown>;
+
+/**
+ * Registers commands whose errors are reported to the user, see {@link command}.
+ *
+ * @param context - The extension context, which disposes of the commands on deactivation.
+ * @param handlers - Each command's implementation, by command id.
+ */
+export function registerCommands(context: vscode.ExtensionContext, handlers: Record<string, CommandHandler>): void {
+  for (const [id, handler] of Object.entries(handlers)) {
+    context.subscriptions.push(vscode.commands.registerCommand(id, command(handler)));
+  }
+}
+
+/**
  * Resolves a path to its true name, following symbolic links.
  *
  * @param p - The path to resolve.

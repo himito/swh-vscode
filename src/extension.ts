@@ -17,13 +17,13 @@ import * as vscode from 'vscode';
 import { Git, type ScanItem, Swh } from './core';
 import {
   ApiToken,
-  command,
   CommandArg,
   Commands,
   config,
   envToken,
   info,
   MenuView,
+  registerCommands,
   REPORT_SCHEME,
   Reports,
   ScanView,
@@ -61,62 +61,38 @@ export function activate(context: vscode.ExtensionContext) {
   const commands = new Commands(swh, reports, () => statusBar?.forget());
   const scan = new ScanView(swh, () => commands.repoRoot());
 
-  // registers a command whose errors are reported to the user
-  const reg = (id: string, fn: (...args: any[]) => Promise<unknown>) =>
-    context.subscriptions.push(vscode.commands.registerCommand(id, command(fn)));
+  registerCommands(context, {
+    // the archive: status, visits, save
+    'swh.menu': () => commands.menu(),
+    'swh.status': () => commands.status(),
+    'swh.statusOther': () => commands.status(true),
+    'swh.visits': () => commands.visits(),
+    'swh.visitsOther': () => commands.visits(true),
+    'swh.save': () => commands.save(),
+    'swh.saveOther': () => commands.save(true),
+    'swh.refresh': () => commands.refresh(),
 
-  // the archive: status, visits, save
-  reg('swh.menu', () => commands.menu());
-  reg('swh.status', () => commands.status());
-  reg('swh.statusOther', () => commands.status(true));
-  reg('swh.visits', () => commands.visits());
-  reg('swh.visitsOther', () => commands.visits(true));
-  reg('swh.save', () => commands.save());
-  reg('swh.saveOther', () => commands.save(true));
-  // SWHIDs and citations: a Uri from a context menu, or options from a keybinding or the menu
-  reg('swh.swhidCopy', (arg?: CommandArg) => commands.swhidCopy('swhid', arg));
-  reg('swh.swhidCopyArchived', (arg?: CommandArg) => commands.swhidCopy('archived', arg));
-  reg('swh.swhidCopyLink', (arg?: CommandArg) => commands.swhidCopy('link', arg));
-  reg('swh.swhidCopyMarkdown', (arg?: CommandArg) => commands.swhidCopy('markdown', arg));
-  reg('swh.swhidOpen', (arg?: CommandArg) => commands.swhidCopy('open', arg));
-  reg('swh.cite', (arg?: CommandArg) => commands.cite(false, arg));
-  reg('swh.citeOther', () => commands.cite(true));
-  reg('swh.refresh', () => commands.refresh());
-  reg('swh.openSwhid', (swhid?: string) => commands.openSwhid(swhid));
-  // a click on the status bar item: the SWHID of what it shows
-  reg('swh.statusBarCopy', async () => {
-    const current = statusBar?.current;
-    if (!current) return;
-    await commands.swhidCopy('swhid', current.dir ? { path: current.path } : undefined);
-  });
-  // the API token, in VS Code's secret storage
-  reg('swh.setToken', async () => {
-    const value = await vscode.window.showInputBox({
-      prompt: 'Software Heritage API token, from your archive account (https://archive.softwareheritage.org/oidc/profile/)',
-      password: true,
-      ignoreFocusOut: true,
-    });
-    if (value === undefined) return;
-    if (!(await apiToken.store(value))) {
-      info('Software Heritage API token cleared: the value was blank');
-      return;
-    }
-    info(
-      envToken()
-        ? 'Token stored; SWH_API_TOKEN, set in the environment, still takes precedence'
-        : 'Software Heritage API token stored',
-    );
-  });
-  reg('swh.clearToken', async () => {
-    await apiToken.clear();
-    info('Software Heritage API token cleared');
-  });
+    // SWHIDs and citations: a Uri from a context menu, or options from a keybinding or the menu
+    'swh.swhidCopy': (arg?: CommandArg) => commands.swhidCopy('swhid', arg),
+    'swh.swhidCopyArchived': (arg?: CommandArg) => commands.swhidCopy('archived', arg),
+    'swh.swhidCopyLink': (arg?: CommandArg) => commands.swhidCopy('link', arg),
+    'swh.swhidCopyMarkdown': (arg?: CommandArg) => commands.swhidCopy('markdown', arg),
+    'swh.swhidOpen': (arg?: CommandArg) => commands.swhidCopy('open', arg),
+    'swh.cite': (arg?: CommandArg) => commands.cite(false, arg),
+    'swh.citeOther': () => commands.cite(true),
+    'swh.openSwhid': (swhid?: string) => commands.openSwhid(swhid),
+    'swh.statusBarCopy': () => copyStatusBarSwhid(commands, statusBar),
 
-  // the Scan view and the actions on its items
-  reg('swh.scan', () => scan.run());
-  reg('swh.scan.openInArchive', (i?: ScanItem) => scan.openInArchive(i));
-  reg('swh.scan.copySwhid', (i?: ScanItem) => scan.copySwhid(i));
-  reg('swh.scan.openFile', (i?: ScanItem) => scan.openFile(i));
+    // the API token
+    'swh.setToken': () => setToken(apiToken),
+    'swh.clearToken': () => clearToken(apiToken),
+
+    // the Scan view and the actions on its items
+    'swh.scan': () => scan.run(),
+    'swh.scan.openInArchive': (item?: ScanItem) => scan.openInArchive(item),
+    'swh.scan.copySwhid': (item?: ScanItem) => scan.copySwhid(item),
+    'swh.scan.openFile': (item?: ScanItem) => scan.openFile(item),
+  });
 
   context.subscriptions.push(
     statusBar,
@@ -128,6 +104,51 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   void statusBar.update();
+}
+
+/**
+ * Copies the SWHID of what the status bar item shows, when it is clicked.
+ *
+ * @param commands - The commands, which copy the SWHID.
+ * @param statusBar - The status bar item; nothing is copied when it shows nothing.
+ */
+async function copyStatusBarSwhid(commands: Commands, statusBar: Maybe<StatusBar>): Promise<void> {
+  const current = statusBar?.current;
+  if (!current) return;
+  await commands.swhidCopy('swhid', current.dir ? { path: current.path } : undefined);
+}
+
+/**
+ * Asks the user for an API token and stores it; a blank one clears it.
+ *
+ * @param apiToken - Where the token is stored.
+ */
+async function setToken(apiToken: ApiToken): Promise<void> {
+  const value = await vscode.window.showInputBox({
+    prompt: 'Software Heritage API token, from your archive account (https://archive.softwareheritage.org/oidc/profile/)',
+    password: true,
+    ignoreFocusOut: true,
+  });
+  if (value === undefined) return;
+  if (!(await apiToken.store(value))) {
+    info('Software Heritage API token cleared: the value was blank');
+    return;
+  }
+  info(
+    envToken()
+      ? 'Token stored; SWH_API_TOKEN, set in the environment, still takes precedence'
+      : 'Software Heritage API token stored',
+  );
+}
+
+/**
+ * Removes the stored API token.
+ *
+ * @param apiToken - Where the token is stored.
+ */
+async function clearToken(apiToken: ApiToken): Promise<void> {
+  await apiToken.clear();
+  info('Software Heritage API token cleared');
 }
 
 /**
