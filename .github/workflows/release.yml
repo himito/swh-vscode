@@ -40,3 +40,22 @@ jobs:
         with:
           files: swh-vscode-${{ github.ref_name }}.vsix
           generate_release_notes: true
+
+  publish:
+    # Only publish to the Marketplace once tests, the tag check and the GitHub Release succeeded.
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # to authenticate to the Marketplace via OIDC
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx --yes @vscode/vsce publish --oidc
