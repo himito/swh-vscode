@@ -59,7 +59,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    *
    * @param swh - The backend that computes the archival status of the tree.
    * @param repoRoot - Gives the root of the current repository, or throws a
-   * {@link UserError} outside one.
+   * {@link core!UserError} outside one.
    */
   constructor(
     private swh: Swh,
@@ -156,7 +156,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * number of archived files. A failure is shown in the view's message. When
    * a newer scan has started meanwhile, the result is dropped.
    *
-   * @throws {@link UserError} when the current directory is not in a Git repository.
+   * @throws {@link core!UserError} when the current directory is not in a Git repository.
    */
   async run(): Promise<void> {
     const root = await this.repoRoot();
@@ -190,7 +190,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    *
    * @param arg - The item the action was run on, when run from its context menu or inline.
    * @returns `arg`, else the item selected in the view.
-   * @throws {@link UserError} when no item is given or selected.
+   * @throws {@link core!UserError} when no item is given or selected.
    */
   private item(arg?: ScanItem): ScanItem {
     const item = arg ?? this.view.selection[0];
@@ -202,7 +202,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * Open a file of the scan in an editor; do nothing for a directory or a submodule.
    *
    * @param arg - The item to open, else the selected one.
-   * @throws {@link UserError} when no item is given or selected.
+   * @throws {@link core!UserError} when no item is given or selected.
    */
   async openFile(arg?: ScanItem) {
     const item = this.item(arg);
@@ -214,7 +214,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * Open an item in the archive's web interface, by its core SWHID.
    *
    * @param arg - The item to open, else the selected one.
-   * @throws {@link UserError} when no item is given or selected.
+   * @throws {@link core!UserError} when no item is given or selected.
    */
   async openInArchive(arg?: ScanItem) {
     await openUrl(browseUrl(this.archiveUrl, this.item(arg).swhid));
@@ -224,7 +224,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * Copy the core SWHID of an item to the clipboard.
    *
    * @param arg - The item whose SWHID to copy, else the selected one.
-   * @throws {@link UserError} when no item is given or selected.
+   * @throws {@link core!UserError} when no item is given or selected.
    */
   async copySwhid(arg?: ScanItem) {
     const swhid = this.item(arg).swhid;

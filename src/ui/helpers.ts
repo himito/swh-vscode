@@ -4,8 +4,8 @@
  *
  * @remarks
  * This is the thin layer between the commands and the VS Code window API.
- * Commands throw {@link UserError} for problems the user can act on and
- * {@link Cancelled} when the user dismisses a prompt; {@link command} turns
+ * Commands throw {@link core!UserError} for problems the user can act on and
+ * {@link core!Cancelled} when the user dismisses a prompt; {@link command} turns
  * both into the right kind of feedback, so command code never shows errors
  * itself.
  *
@@ -75,7 +75,7 @@ export async function openUrl(url: string): Promise<void> {
  * Wraps an async function as a command handler that reports its errors.
  *
  * @remarks
- * A {@link Cancelled} error is ignored, a {@link UserError} is shown as a
+ * A {@link core!Cancelled} error is ignored, a {@link core!UserError} is shown as a
  * warning with its message, and any other error is shown as an error
  * prefixed with "Software Heritage:". The handler itself never rejects.
  *
@@ -125,7 +125,7 @@ export function registerCommands(context: vscode.ExtensionContext, handlers: Rec
  *
  * @param p - The path to resolve.
  * @returns The canonical absolute path.
- * @throws {@link UserError} when the path does not exist.
+ * @throws {@link core!UserError} when the path does not exist.
  */
 export async function realpath(p: string): Promise<string> {
   try {
@@ -143,7 +143,7 @@ export async function realpath(p: string): Promise<string> {
  * else the first workspace folder on disk.
  *
  * @returns The directory's path, not resolved through symbolic links.
- * @throws {@link UserError} when no file on disk is active and no folder is open.
+ * @throws {@link core!UserError} when no file on disk is active and no folder is open.
  */
 export function currentDir(): string {
   const doc = vscode.window.activeTextEditor?.document;

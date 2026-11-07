@@ -11,7 +11,7 @@ import { SwhClient } from './client';
 
 /** Which SWHIDs the archive holds, remembered; see {@link Swh}. */
 export class SwhKnown extends SwhClient {
-  /** SWHID → whether the archive holds it; see {@link memoGet}. */
+  /** SWHID → whether the archive holds it; see `memoGet`. */
   protected knownMemo: Memo<boolean> = new Map();
   /**
    * Bumped whenever the memos forget answers: a request sent before then

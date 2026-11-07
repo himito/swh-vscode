@@ -59,10 +59,14 @@ export class ApiToken implements vscode.Disposable {
    */
   async store(value: string): Promise<boolean> {
     const token = normalizeToken(value);
+
+    // if the token is blank, remove it from the storage
     if (!token) {
       await this.clear();
       return false;
     }
+
+    // store the token, and forget the cached lookup
     await this.secrets.store(TOKEN_KEY, token);
     this.forget();
     return true;

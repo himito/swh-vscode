@@ -102,7 +102,7 @@ async function setWithoutContext(value: boolean): Promise<void> {
  *
  * @remarks
  * The *Without context* checkbox writes the `swh.swhidWithoutContext`
- * setting, see {@link setWithoutContext}. The view also redraws when that
+ * setting, see `setWithoutContext`. The view also redraws when that
  * setting changes elsewhere, so the checkbox always reflects it.
  */
 export class MenuView implements vscode.TreeDataProvider<Entry>, vscode.Disposable {

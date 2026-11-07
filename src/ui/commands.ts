@@ -8,7 +8,7 @@
  * in the active editor (and its selected lines), a file or folder given by a
  * context menu, or else the current folder (see {@link Commands.target}).
  * They talk to the archive through {@link Swh}, show their results with the
- * helpers of `helpers.ts`, and report problems by throwing {@link UserError}.
+ * helpers of `helpers.ts`, and report problems by throwing {@link core!UserError}.
  *
  * @packageDocumentation
  */
@@ -94,7 +94,7 @@ export class Commands {
    * The root of the Git repository of the current directory.
    *
    * @returns The repository's root.
-   * @throws {@link UserError} when no file or folder is open, or the current
+   * @throws {@link core!UserError} when no file or folder is open, or the current
    * directory is not inside a Git repository.
    */
   async repoRoot(): Promise<string> {
@@ -133,8 +133,8 @@ export class Commands {
    * @param prompt - The prompt of the input box.
    * @param def - The URL proposed in the input box.
    * @returns The normalized origin.
-   * @throws {@link Cancelled} when the user dismisses the input box.
-   * @throws {@link UserError} when the input is empty, looks like a web page
+   * @throws {@link core!Cancelled} when the user dismisses the input box.
+   * @throws {@link core!UserError} when the input is empty, looks like a web page
    * rather than a repository, or is not a public URL.
    */
   async readOrigin(prompt: string, def?: string): Promise<string> {
@@ -164,8 +164,8 @@ export class Commands {
    * @param verb - What the command does to the origin, for the prompt, e.g. "check".
    * @param force - Whether to ask even when there is a public origin here.
    * @returns The origin asked for, or `undefined` to use the current repository.
-   * @throws {@link Cancelled} when the user dismisses the input box.
-   * @throws {@link UserError} when the URL entered is not valid, see {@link Commands.readOrigin}.
+   * @throws {@link core!Cancelled} when the user dismisses the input box.
+   * @throws {@link core!UserError} when the URL entered is not valid, see {@link Commands.readOrigin}.
    */
   async originArg(verb: string, force: boolean): Promise<Maybe<string>> {
     const local = await this.localOrigin();
@@ -184,7 +184,7 @@ export class Commands {
    *
    * @param arg - A file or folder from a context menu or the status bar, if any.
    * @returns The target.
-   * @throws {@link UserError} when `arg` is not a local file, the path does not
+   * @throws {@link core!UserError} when `arg` is not a local file, the path does not
    * exist, the user declines to save a modified file, or the current
    * directory is not inside a Git repository.
    */
@@ -278,8 +278,8 @@ export class Commands {
    *
    * @param force - Whether to ask for another repository's URL.
    * @defaultValue `force` is `false`.
-   * @throws {@link Cancelled} when the user dismisses the prompt.
-   * @throws {@link UserError} when there is no repository or remote, or the
+   * @throws {@link core!Cancelled} when the user dismisses the prompt.
+   * @throws {@link core!UserError} when there is no repository or remote, or the
    * archive cannot be reached or refuses the request.
    */
   async status(force = false): Promise<void> {
@@ -315,8 +315,8 @@ export class Commands {
    *
    * @param force - Whether to ask for another repository's URL.
    * @defaultValue `force` is `false`.
-   * @throws {@link Cancelled} when the user dismisses the prompt.
-   * @throws {@link UserError} when there is no repository or remote, or the
+   * @throws {@link core!Cancelled} when the user dismisses the prompt.
+   * @throws {@link core!UserError} when there is no repository or remote, or the
    * archive cannot be reached or refuses the request.
    */
   async visits(force = false): Promise<void> {
@@ -339,8 +339,8 @@ export class Commands {
    *
    * @param force - Whether to ask for another repository's URL.
    * @defaultValue `force` is `false`.
-   * @throws {@link Cancelled} when the user dismisses the prompt.
-   * @throws {@link UserError} as {@link Commands.doSave} does.
+   * @throws {@link core!Cancelled} when the user dismisses the prompt.
+   * @throws {@link core!UserError} as {@link Commands.doSave} does.
    */
   async save(force = false): Promise<void> {
     await this.doSave(await this.originArg('save', force));
@@ -355,7 +355,7 @@ export class Commands {
    * may change, so {@link Commands.onArchiveChange} is called.
    *
    * @param origin - The public origin to save, or `undefined` for the current repository.
-   * @throws {@link UserError} when there is no repository or remote, the
+   * @throws {@link core!UserError} when there is no repository or remote, the
    * origin is not a public URL, or the archive cannot be reached or refuses
    * the request.
    */
@@ -442,7 +442,7 @@ export class Commands {
    * @param what - What to produce.
    * @param arg - The command's argument: the target, or the `bare` option.
    * @returns The text copied or opened.
-   * @throws {@link UserError} when there is no target, it is not a local file,
+   * @throws {@link core!UserError} when there is no target, it is not a local file,
    * the user declines to save a modified file, or Git fails.
    */
   async swhidCopy(what: What, arg?: CommandArg): Promise<string> {
@@ -514,8 +514,8 @@ export class Commands {
    * @param force - Whether to ask for another repository's URL.
    * @param arg - The command's argument: the file or folder to cite, if any.
    * @defaultValue `force` is `false`.
-   * @throws {@link Cancelled} when the user dismisses the prompt.
-   * @throws {@link UserError} when there is nothing to cite, the repository
+   * @throws {@link core!Cancelled} when the user dismisses the prompt.
+   * @throws {@link core!UserError} when there is nothing to cite, the repository
    * asked for is not archived, or the archive cannot be reached.
    */
   async cite(force = false, arg?: CommandArg): Promise<void> {

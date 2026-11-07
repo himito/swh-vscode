@@ -58,7 +58,7 @@ const DESCRIPTIONS: Record<Status, string> = {
 
 /** What the status bar knows about one path. */
 interface Entry {
-  /** The path and modification time it was checked at, see {@link stampOf}. */
+  /** The path and modification time it was checked at, see `stampOf`. */
   stamp: string;
   /** The archival status found. */
   status: Status;
@@ -223,7 +223,7 @@ export class StatusBar implements vscode.Disposable {
    *
    * @param p - The real path to check.
    * @param dir - Whether `p` is a directory.
-   * @param stamp - The path's stamp at the time of the check, see {@link stampOf}.
+   * @param stamp - The path's stamp at the time of the check, see `stampOf`.
    */
   private async check(p: string, dir: boolean, stamp: string) {
     const check = ++this.checks;

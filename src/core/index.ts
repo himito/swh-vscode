@@ -15,3 +15,4 @@ export * from './git';
 export * from './http';
 export * from './scan';
 export * from './swhid';
+export * from './types';
