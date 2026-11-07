@@ -37,6 +37,7 @@ import {
   UserError,
   type Visit,
 } from '../core';
+import { MENU, type MenuEntry } from './menu';
 import type { Reports } from './reports';
 import { ask, busy, config, fileEditor, info, openUrl, realCurrentDir, realpath, selectionLines } from './helpers';
 import type { Maybe } from '../core/types';
@@ -255,48 +256,40 @@ function menuSeparator(label: string): MenuItem {
   return { label, kind: vscode.QuickPickItemKind.Separator };
 }
 
-/** The menu's commands about the archive. */
-const ARCHIVE_ITEMS: readonly MenuItem[] = [
-  menuSeparator('SWH Archive'),
-  { label: '$(cloud-upload) Save', description: 'ask SWH to save code now', command: 'swh.save' },
-  { label: '$(info) Status', description: 'is the repo archived?', command: 'swh.status' },
-  { label: '$(list-tree) Scan', description: 'show what is archived', command: 'swh.scan' },
-  { label: '$(history) Visits', description: 'list its last visits', command: 'swh.visits' },
-  { label: '$(refresh) Refresh', description: 'forget what may have changed', command: 'swh.refresh' },
-];
-
-/** The menu's SWHID commands, after the "Without context" switch. */
-const SWHID_ITEMS: readonly MenuItem[] = [
-  { label: '$(copy) Copy', description: 'SWHID of the file, selection or directory', command: 'swh.swhidCopy', takesBare: true },
-  { label: '$(versions) Copy the archived version', description: 'SWHID of the version SWH holds', command: 'swh.swhidCopyArchived', takesBare: true },
-  { label: '$(link-external) Open in the archive', command: 'swh.swhidOpen', takesBare: true },
-  { label: '$(link) Copy the archive link', command: 'swh.swhidCopyLink', takesBare: true },
-  { label: '$(markdown) Copy as a Markdown link', command: 'swh.swhidCopyMarkdown', takesBare: true },
-  { label: '$(quote) Cite', description: 'show a BibTeX entry', command: 'swh.cite' },
-];
-
 /**
- * The menu's "Without context" switch.
+ * The Quick Pick item of a menu entry.
  *
- * @param bare - Whether the switch is on: the SWHID commands give bare SWHIDs.
- * @returns The switch, its icon and description showing its state.
+ * @remarks
+ * The *Without context* switch shows its state in its icon and description;
+ * it changes nothing but this use of the menu.
+ *
+ * @param entry - The entry, from {@link MENU}.
+ * @param bare - The state of the *Without context* switch.
+ * @returns The item.
  */
-function bareToggleItem(bare: boolean): MenuItem {
-  return {
-    label: `$(${bare ? 'pass-filled' : 'circle-large-outline'}) Without context`,
-    description: bare ? 'on: bare SWHIDs' : 'off: qualified SWHIDs',
-    toggle: true,
-  };
+function menuItem(entry: MenuEntry, bare: boolean): MenuItem {
+  if (entry.toggle) {
+    return {
+      label: `$(${bare ? 'pass-filled' : 'circle-large-outline'}) ${entry.label}`,
+      description: bare ? 'on: bare SWHIDs' : 'off: qualified SWHIDs',
+      toggle: true,
+    };
+  }
+  const label = entry.icon ? `$(${entry.icon}) ${entry.label}` : entry.label;
+  return { label, description: entry.description, command: entry.command, takesBare: entry.takesBare };
 }
 
 /**
- * Shows the Quick Pick menu.
+ * Shows the Quick Pick menu: the groups of {@link MENU} marked for it.
  *
- * @param bare - The state of the "Without context" switch.
+ * @param bare - The state of the *Without context* switch.
  * @returns The item picked, or `undefined` when the menu is dismissed.
  */
 function pickMenuItem(bare: boolean): Thenable<Maybe<MenuItem>> {
-  const items = [...ARCHIVE_ITEMS, menuSeparator('SWHID'), bareToggleItem(bare), ...SWHID_ITEMS];
+  const items = MENU.filter((group) => group.inQuickPick).flatMap((group) => [
+    menuSeparator(group.label),
+    ...group.entries.map((entry) => menuItem(entry, bare)),
+  ]);
   return vscode.window.showQuickPick(items, { placeHolder: 'Software Heritage', matchOnDescription: true });
 }
 

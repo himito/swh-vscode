@@ -9,6 +9,7 @@
 export * from './apiToken';
 export * from './commands';
 export * from './helpers';
+export * from './menu';
 export * from './menuView';
 export * from './reports';
 export * from './scanView';

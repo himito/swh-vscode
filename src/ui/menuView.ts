@@ -8,73 +8,29 @@
  * checkbox: *Without context* switches the `swh.swhidWithoutContext`
  * setting, which makes the SWHID commands give bare SWHIDs.
  *
- * To add a command to the menu, add an {@link Entry} to {@link MENU}.
+ * The menu's groups and entries are defined in {@link MENU}, shared with
+ * the Quick Pick menu.
  *
  * @packageDocumentation
  */
 
 import * as vscode from 'vscode';
 import { config } from './helpers';
+import { MENU, type MenuEntry, type MenuGroup } from './menu';
 import type { Maybe } from '../core/types';
 
-/** An entry of the menu: a group, a command, or the *Without context* switch. */
-type Entry = {
-  /** The text shown. */
-  label: string;
-  /** Shown after the label, dimmed. */
-  description?: string;
-  /** The name of the codicon shown before the label, e.g. `copy`. */
-  icon?: string;
-  /** The id of the command the entry runs. */
-  command?: string;
-  /** Whether the entry is the "without context" switch, shown as a checkbox. */
-  toggle?: boolean;
-  /** The entries of a group; a group is shown expanded. */
-  children?: Entry[];
-};
+/** A node of the Menu view's tree: a group, or one of its entries. */
+type MenuNode = MenuGroup | MenuEntry;
 
-/** The menu: its groups, and their entries in order. */
-const MENU: Entry[] = [
-  {
-    label: 'SWH Archive',
-    children: [
-      { label: 'Save', description: 'ask SWH to save code now', icon: 'cloud-upload', command: 'swh.save' },
-      { label: 'Status', description: 'is the repo archived?', icon: 'info', command: 'swh.status' },
-      { label: 'Scan', description: 'show what is archived', icon: 'list-tree', command: 'swh.scan' },
-      { label: 'Visits', description: 'list its last visits', icon: 'history', command: 'swh.visits' },
-      { label: 'Refresh', description: 'forget what may have changed', icon: 'refresh', command: 'swh.refresh' },
-    ],
-  },
-  {
-    label: 'SWHID',
-    children: [
-      { label: 'Without context', toggle: true },
-      { label: 'Copy', description: 'of the file, selection or directory', icon: 'copy', command: 'swh.swhidCopy' },
-      { label: 'Copy the archived version', description: 'the version SWH holds', icon: 'versions', command: 'swh.swhidCopyArchived' },
-      { label: 'Open in the archive', icon: 'link-external', command: 'swh.swhidOpen' },
-      { label: 'Copy the archive link', icon: 'link', command: 'swh.swhidCopyLink' },
-      { label: 'Copy as a Markdown link', icon: 'markdown', command: 'swh.swhidCopyMarkdown' },
-      { label: 'Cite', description: 'show a BibTeX entry', icon: 'quote', command: 'swh.cite' },
-    ],
-  },
-  {
-    label: 'Another repository',
-    children: [
-      { label: 'Status…', icon: 'info', command: 'swh.statusOther' },
-      { label: 'Visits…', icon: 'history', command: 'swh.visitsOther' },
-      { label: 'Save…', icon: 'cloud-upload', command: 'swh.saveOther' },
-      { label: 'Cite…', icon: 'quote', command: 'swh.citeOther' },
-      { label: 'Open a SWHID…', icon: 'go-to-file', command: 'swh.openSwhid' },
-    ],
-  },
-  {
-    label: 'API token',
-    children: [
-      { label: 'Set API token', icon: 'key', command: 'swh.setToken' },
-      { label: 'Clear API token', icon: 'trash', command: 'swh.clearToken' },
-    ],
-  },
-];
+/**
+ * Whether a node of the tree is a group.
+ *
+ * @param node - The node.
+ * @returns `true` for a group, `false` for an entry.
+ */
+function isGroup(node: MenuNode): node is MenuGroup {
+  return 'entries' in node;
+}
 
 /**
  * Sets `swh.swhidWithoutContext`, as the Menu view's checkbox does.
@@ -98,6 +54,47 @@ async function setWithoutContext(value: boolean): Promise<void> {
 }
 
 /**
+ * The tree item of a group: its title, shown expanded.
+ *
+ * @param group - The group.
+ * @returns The tree item.
+ */
+function groupItem(group: MenuGroup): vscode.TreeItem {
+  const item = new vscode.TreeItem(group.label, vscode.TreeItemCollapsibleState.Expanded);
+  item.id = `${group.label}:`;
+  return item;
+}
+
+/**
+ * The tree item of an entry.
+ *
+ * @remarks
+ * A command entry runs its command when clicked. The switch is shown as a
+ * checkbox, checked when `swh.swhidWithoutContext` is on, and its
+ * description tells which SWHIDs the commands give.
+ *
+ * @param entry - The entry.
+ * @returns The tree item.
+ */
+function entryItem(entry: MenuEntry): vscode.TreeItem {
+  const item = new vscode.TreeItem(entry.label, vscode.TreeItemCollapsibleState.None);
+  item.id = `${entry.label}:${entry.command ?? ''}`;
+  item.description = entry.description;
+  if (entry.icon) item.iconPath = new vscode.ThemeIcon(entry.icon);
+  if (entry.command) {
+    item.command = { command: entry.command, title: entry.label };
+    item.tooltip = entry.description ? `${entry.label}: ${entry.description}` : entry.label;
+  }
+  if (entry.toggle) {
+    const bare = config().get<boolean>('swhidWithoutContext', false);
+    item.checkboxState = bare ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
+    item.description = bare ? 'bare SWHIDs' : 'qualified SWHIDs';
+    item.tooltip = 'Whether the SWHID commands give the bare SWHID, without its context (swh.swhidWithoutContext)';
+  }
+  return item;
+}
+
+/**
  * The data provider of the Menu view.
  *
  * @remarks
@@ -105,9 +102,9 @@ async function setWithoutContext(value: boolean): Promise<void> {
  * setting, see `setWithoutContext`. The view also redraws when that
  * setting changes elsewhere, so the checkbox always reflects it.
  */
-export class MenuView implements vscode.TreeDataProvider<Entry>, vscode.Disposable {
+export class MenuView implements vscode.TreeDataProvider<MenuNode>, vscode.Disposable {
   /** Fires when the menu must be redrawn: the switch's setting changed. */
-  private emitter = new vscode.EventEmitter<Maybe<Entry>>();
+  private emitter = new vscode.EventEmitter<Maybe<MenuNode>>();
   /** The event VS Code listens to, to redraw the menu. */
   readonly onDidChangeTreeData = this.emitter.event;
   /** The view and the event listeners, disposed of with the provider. */
@@ -120,8 +117,8 @@ export class MenuView implements vscode.TreeDataProvider<Entry>, vscode.Disposab
       view,
       this.emitter,
       view.onDidChangeCheckboxState(async (e) => {
-        for (const [entry, state] of e.items) {
-          if (entry.toggle) await setWithoutContext(state === vscode.TreeItemCheckboxState.Checked);
+        for (const [node, state] of e.items) {
+          if (!isGroup(node) && node.toggle) await setWithoutContext(state === vscode.TreeItemCheckboxState.Checked);
         }
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
@@ -136,45 +133,25 @@ export class MenuView implements vscode.TreeDataProvider<Entry>, vscode.Disposab
   }
 
   /**
-   * The children of an entry, for VS Code.
+   * The children of a node, for VS Code.
    *
-   * @param entry - The entry whose children to give; undefined for the top level.
-   * @returns The entries of a group, nothing for a command, or the groups at the top level.
+   * @param node - The node whose children to give; `undefined` for the top level.
+   * @returns The groups at the top level, a group's entries, or nothing for an entry.
    */
-  getChildren(entry?: Entry): Entry[] {
-    return entry ? entry.children ?? [] : MENU;
+  getChildren(node?: MenuNode): MenuNode[] {
+    // VS Code takes a mutable array: give copies of the shared, read-only menu
+    if (!node) return [...MENU];
+    return isGroup(node) ? [...node.entries] : [];
   }
 
   /**
-   * How VS Code shows an entry.
+   * How VS Code shows a node.
    *
-   * @remarks
-   * Groups are shown expanded. A command entry runs its command when
-   * clicked. The switch is shown as a checkbox, checked when
-   * `swh.swhidWithoutContext` is on, and its description tells which SWHIDs
-   * the commands give.
-   *
-   * @param entry - The entry to show.
-   * @returns The tree item for `entry`.
+   * @param node - The node to show.
+   * @returns The tree item for `node`: a group shown expanded, or an entry
+   * that runs its command or, for the switch, is a checkbox.
    */
-  getTreeItem(entry: Entry): vscode.TreeItem {
-    const item = new vscode.TreeItem(
-      entry.label,
-      entry.children ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None,
-    );
-    item.id = `${entry.label}:${entry.command ?? ''}`;
-    item.description = entry.description;
-    if (entry.icon) item.iconPath = new vscode.ThemeIcon(entry.icon);
-    if (entry.command) {
-      item.command = { command: entry.command, title: entry.label };
-      item.tooltip = `${entry.label}${entry.description ? `: ${entry.description}` : ''}`;
-    }
-    if (entry.toggle) {
-      const bare = config().get<boolean>('swhidWithoutContext', false);
-      item.checkboxState = bare ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
-      item.description = bare ? 'bare SWHIDs' : 'qualified SWHIDs';
-      item.tooltip = 'Whether the SWHID commands give the bare SWHID, without its context (swh.swhidWithoutContext)';
-    }
-    return item;
+  getTreeItem(node: MenuNode): vscode.TreeItem {
+    return isGroup(node) ? groupItem(node) : entryItem(node);
   }
 }
