@@ -87,6 +87,25 @@ export function shortSwhid(swhid: string): string {
   return swhid.replace(/^(swh:1:[a-z]{3}:[0-9a-f]{10})[0-9a-f]*/, '$1');
 }
 
+/** A SWHID, core or qualified: `swh:1:<type>:<sha1>`, then `;`-separated qualifiers, if any. */
+const SWHID_PATTERN = /^swh:1:(cnt|dir|rev|rel|snp):[0-9a-f]{40}(;.*)?$/;
+
+/**
+ * Tells whether a text is a SWHID, with or without qualifiers.
+ *
+ * @param text - The text, e.g. as the user typed it.
+ * @returns `true` for a SWHID.
+ *
+ * @example
+ * ```ts
+ * isSwhid('swh:1:cnt:0123456789abcdef0123456789abcdef01234567;lines=1'); // true
+ * isSwhid('swh:1:cnt:0123'); // false
+ * ```
+ */
+export function isSwhid(text: string): boolean {
+  return SWHID_PATTERN.test(text);
+}
+
 /**
  * Removes the trailing slashes of a base URL setting.
  *
@@ -460,7 +479,7 @@ export function originName(origin: string): string {
  * @returns `[offset, swhid]` pairs, `offset` being the SWHID's position in `text`.
  */
 export function findSwhids(text: string): Array<[number, string]> {
-  const re = /swh:1:(?:cnt|dir|rev|rel|snp|ori):[0-9a-f]{40}(?:;[^\s"'`<>()[\]{}]*)?/g;
+  const re = /swh:1:(?:cnt|dir|rev|rel|snp):[0-9a-f]{40}(?:;[^\s"'`<>()[\]{}]*)?/g;
   const out: Array<[number, string]> = [];
   for (const m of text.matchAll(re)) {
     out.push([m.index!, m[0].replace(/[.,:;]+$/, '')]);

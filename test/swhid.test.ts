@@ -18,6 +18,7 @@ import {
   encodeOrigin,
   encodePath,
   findSwhids,
+  isSwhid,
   normalizeOrigin,
   originCandidates,
   originName,
@@ -106,6 +107,19 @@ test('helpers', () => {
   assert.equal(originName('https://github.com/bzg/swh.el'), 'swh.el');
   assert.equal(originName('https://gitlab.com/a/repo.git/'), 'repo');
   assert.equal(originName('C:\\Users\\me\\repo.git'), 'repo');
+});
+
+test('isSwhid', () => {
+  const hash = '0123456789abcdef0123456789abcdef01234567';
+  for (const type of ['cnt', 'dir', 'rev', 'rel', 'snp']) assert.ok(isSwhid(`swh:1:${type}:${hash}`), type);
+  assert.ok(!isSwhid(`swh:1:ori:${hash}`));
+  assert.ok(isSwhid(`swh:1:cnt:${hash};origin=https://example.org/me/repo;lines=1-2`));
+  assert.ok(!isSwhid(''));
+  assert.ok(!isSwhid('swh:1:cnt:0123'));
+  assert.ok(!isSwhid(`swh:1:xyz:${hash}`));
+  assert.ok(!isSwhid(`swh:2:cnt:${hash}`));
+  assert.ok(!isSwhid(`swh:1:cnt:${hash.toUpperCase()}`));
+  assert.ok(!isSwhid(` swh:1:cnt:${hash}`));
 });
 
 // SWHIDs are found in text with their qualifiers but without trailing

@@ -57,7 +57,7 @@ const DESCRIPTIONS: Record<Status, string> = {
 };
 
 /** What the status bar knows about one path. */
-interface Entry {
+type Entry = {
   /** The path and modification time it was checked at, see `stampOf`. */
   stamp: string;
   /** The archival status found. */
@@ -68,7 +68,7 @@ interface Entry {
   error?: string;
   /** The number of the check that set this entry: a later check wins. */
   check: number;
-}
+};
 
 /**
  * The status bar item showing whether the current file is archived.

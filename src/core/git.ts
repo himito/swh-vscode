@@ -18,20 +18,20 @@ import { UserError } from './http';
 import type { Maybe } from './types';
 
 /** The result of a Git command. */
-export interface GitResult {
+export type GitResult = {
   /** The exit status: 0 on success, -1 when Git could not be run at all. */
   status: number;
   /** The standard output (and error, if asked for), without its final newlines. */
   out: string;
-}
+};
 
 /** Options of {@link Git.run}. */
-export interface GitOptions {
+export type GitOptions = {
   /** Whether to put the standard error into the output too, e.g. for error messages. */
   stderr?: boolean;
   /** The environment of the Git process; the extension's own by default. */
   env?: NodeJS.ProcessEnv;
-}
+};
 
 /** Runs Git commands. */
 export class Git {

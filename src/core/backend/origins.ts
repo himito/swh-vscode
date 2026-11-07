@@ -9,10 +9,9 @@ import { UserError } from '../http';
 import { core, isPublicOrigin, normalizeOrigin, originCandidates, pathOrigin } from '../swhid';
 import { forgetNegatives, fresh, Memo, MEMO_TTL, memoPut } from './memo';
 import { SwhKnown } from './known';
-import type { OriginInfo } from './types';
+import { toSaveRequest, toVisit, toVisits } from './adapters';
+import type { OriginInfo, OriginVisits, SaveRequest, Visit } from './types';
 import type { Maybe } from '../types';
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** Origins, visits and save requests; see {@link Swh}. */
 export class SwhOrigins extends SwhKnown {
@@ -57,14 +56,15 @@ export class SwhOrigins extends SwhKnown {
    *
    * @param urls - Candidate origin URLs, tried in order.
    * @returns `[url, visit]` for the first archived URL, or `null` when the
-   * archive holds none of them.
+   * archive holds none of them; `visit` is `undefined` when the archive's
+   * answer is malformed, see `toVisit`.
    * @throws {@link UserError} when the archive cannot be reached or answers
    * an error other than 404.
    */
-  private async latestVisit(urls: string[]): Promise<[string, any] | null> {
+  private async latestVisit(urls: string[]): Promise<[string, Maybe<Visit>] | null> {
     for (const url of urls) {
       const resp = await this.api('GET', `/origin/${pathOrigin(url)}/visit/latest/?require_snapshot=true`);
-      if (resp.status !== 404) return [url, this.apiBody(resp, "the origin's visits")];
+      if (resp.status !== 404) return [url, toVisit(this.apiBody(resp, "the origin's visits"))];
     }
     return null;
   }
@@ -84,9 +84,7 @@ export class SwhOrigins extends SwhKnown {
     const found = await this.latestVisit(isPublicOrigin(candidates[0]) ? candidates : []);
     if (!found) return { origin: candidates[0], archived: false };
     const [origin, visit] = found;
-    const info: OriginInfo = { origin, archived: true };
-    for (const k of ['date', 'status', 'snapshot'] as const) if (visit?.[k] != null) info[k] = visit[k];
-    return info;
+    return { origin, archived: true, ...visit };
   }
 
   /**
@@ -128,16 +126,13 @@ export class SwhOrigins extends SwhKnown {
    * The last ten visits of an origin.
    *
    * @param info - The origin's status; a non-archived origin has no visits, and the archive is not asked.
-   * @returns The origin URL and its visits, most recent first.
-   * @throws {@link UserError} when the archive cannot answer.
+   * @returns The origin URL and its visits, most recent first; see `toVisits`.
+   * @throws {@link UserError} when the archive cannot answer, or its answer is not a list.
    */
-  private async originVisits(info: OriginInfo): Promise<{ origin: string; visits: any[] }> {
-    return {
-      origin: info.origin,
-      visits: info.archived
-        ? this.apiBody(await this.api('GET', `/origin/${pathOrigin(info.origin)}/visits/?per_page=10`), "the origin's visits")
-        : [],
-    };
+  private async originVisits(info: OriginInfo): Promise<OriginVisits> {
+    if (!info.archived) return { origin: info.origin, visits: [] };
+    const resp = await this.api('GET', `/origin/${pathOrigin(info.origin)}/visits/?per_page=10`);
+    return { origin: info.origin, visits: toVisits(this.apiBody(resp, "the origin's visits")) };
   }
 
   /**
@@ -196,7 +191,7 @@ export class SwhOrigins extends SwhKnown {
    * @throws {@link UserError} when there is no remote, `origin` is not
    * public, or the archive cannot answer.
    */
-  async visits(root: Maybe<string>, origin?: string): Promise<{ origin: string; visits: any[] }> {
+  async visits(root: Maybe<string>, origin?: string): Promise<OriginVisits> {
     if (origin) return this.originVisits(await this.originStatus(origin));
     return this.originVisits(await this.origin(root!));
   }
@@ -221,16 +216,17 @@ export class SwhOrigins extends SwhKnown {
    * Ask the archive to save a public repository now ("Save Code Now").
    *
    * @param origin - The repository's public URL.
-   * @returns The archive's save request, with `origin` added; its
-   * `save_request_status` is e.g. `accepted` or `pending` (awaiting review).
+   * @returns The save request; see `toSaveRequest`.
    * @throws {@link UserError} when `origin` is not public, or the archive
-   * refuses or cannot answer.
+   * refuses, cannot answer, or answers without a status.
    */
-  async saveOrigin(origin: string): Promise<any> {
+  async saveOrigin(origin: string): Promise<SaveRequest> {
     if (!isPublicOrigin(origin)) throw new UserError('The origin is not a public URL');
-    const request = this.apiBody(await this.api('POST', `/origin/save/git/url/${pathOrigin(origin)}/`), 'the save request');
+    const resp = await this.api('POST', `/origin/save/git/url/${pathOrigin(origin)}/`);
+    const body = this.apiBody(resp, 'the save request');
+    // the request is sent: forget the stale answers even if this one is malformed
     this.forgetBeforeSave(origin);
-    return { origin, ...request };
+    return toSaveRequest(origin, body);
   }
 
   /**
@@ -241,11 +237,10 @@ export class SwhOrigins extends SwhKnown {
    * @throws {@link UserError} when there is no remote, the origin is not
    * public, or the archive refuses or cannot answer.
    */
-  async save(root: string): Promise<any> {
-    const origin = await this.originOf(root);
-    if (!origin) throw new UserError('No remote');
-    if (!isPublicOrigin(origin)) throw new UserError('The origin is not a public URL');
+  async save(root: string): Promise<SaveRequest> {
+    // a non-public origin is not looked up in the archive, and saveOrigin rejects it
     const info = await this.directOrigin(root);
-    return this.saveOrigin(info!.origin);
+    if (!info) throw new UserError('No remote');
+    return this.saveOrigin(info.origin);
   }
 }

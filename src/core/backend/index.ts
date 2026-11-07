@@ -26,7 +26,7 @@ import type { TreeNode } from './types';
 import type { Maybe } from '../types';
 
 export { RATE_LIMIT_MESSAGE } from './client';
-export type { OriginInfo, SwhDeps, SwhidInfo, Token, TreeNode } from './types';
+export type { OriginInfo, OriginVisits, SaveRequest, SwhDeps, SwhidInfo, Token, TreeNode, Visit } from './types';
 
 /**
  * The Software Heritage client: archival status, SWHIDs, visits, save

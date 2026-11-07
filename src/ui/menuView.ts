@@ -18,7 +18,7 @@ import { config } from './helpers';
 import type { Maybe } from '../core/types';
 
 /** An entry of the menu: a group, a command, or the *Without context* switch. */
-interface Entry {
+type Entry = {
   /** The text shown. */
   label: string;
   /** Shown after the label, dimmed. */
@@ -31,7 +31,7 @@ interface Entry {
   toggle?: boolean;
   /** The entries of a group; a group is shown expanded. */
   children?: Entry[];
-}
+};
 
 /** The menu: its groups, and their entries in order. */
 const MENU: Entry[] = [

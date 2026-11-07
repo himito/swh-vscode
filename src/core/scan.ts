@@ -22,7 +22,7 @@ import { ancestors } from './swhid';
 export type ScanStatus = 'archived' | 'partial' | 'not-archived';
 
 /** A file or directory of the scanned tree. */
-export interface ScanItem {
+export type ScanItem = {
   /** The path relative to the repository root, with `/` separators; `"."` for the root. */
   path: string;
   /** The name to show: the last path segment, with a trailing `/` for a directory; `"./"` for the root. */
@@ -39,10 +39,10 @@ export interface ScanItem {
   parent?: ScanItem;
   /** The items in the directory, in path order; empty for a file. */
   children: ScanItem[];
-}
+};
 
 /** A scanned repository: its tree and its figures. */
-export interface Scan {
+export type Scan = {
   /** The root directory, `"."`. */
   root: ScanItem;
   /** Every item, the root first, in path order. */
@@ -57,7 +57,7 @@ export interface Scan {
   archivedDirs: number;
   /** The number of directories partially archived. */
   partialDirs: number;
-}
+};
 
 /**
  * Gives a proportion in percent, rounded down.

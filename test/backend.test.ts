@@ -226,8 +226,7 @@ test('status, unreachable archive, save', async () => {
   // the branch tracks no remote branch: no upstream
   assert.equal(info.upstream, undefined);
   const saved = await s.saveOrigin('https://example.org/me/repo');
-  assert.equal(saved.save_request_status, 'accepted');
-  assert.equal(saved.origin, 'https://example.org/me/repo');
+  assert.deepEqual(saved, { origin: 'https://example.org/me/repo', status: 'accepted' });
   await assert.rejects(s.saveOrigin('/srv/repo'), /not a public URL/);
 
   // the archive unreachable: the SWHID from Git alone

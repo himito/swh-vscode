@@ -56,7 +56,7 @@ export class Cancelled extends Error {
 }
 
 /** An HTTP response, as {@link retrieve} gives it. */
-export interface Resp {
+export type Resp = {
   /** The HTTP status code. */
   status: number;
   /** The parsed JSON body, or {@link NOT_JSON} when the body is not JSON. */
@@ -66,7 +66,7 @@ export interface Resp {
   retryAfter?: number;
   /** The response headers, e.g. for the rate limit. */
   headers: Headers;
-}
+};
 
 /**
  * Reads the number at the start of a header.

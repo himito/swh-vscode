@@ -11,7 +11,7 @@ import type { Maybe } from '../types';
 export type Token = Maybe<string>;
 
 /** The archival status of a repository's origin. */
-export interface OriginInfo {
+export type OriginInfo = {
   /** The origin URL, normalized as the archive names it, e.g. `https://github.com/owner/repo`. */
   origin: string;
   /** Whether the archive holds the origin, i.e. has visited it with a snapshot. */
@@ -26,10 +26,36 @@ export interface OriginInfo {
   upstream?: string;
   /** Whether the archive holds {@link OriginInfo.upstream}. */
   'upstream-archived'?: boolean;
-}
+};
+
+/** An archival visit of an origin, as the archive lists it. */
+export type Visit = {
+  /** When the visit happened, ISO 8601. */
+  date: string;
+  /** How it ended, e.g. `full` or `partial`. */
+  status: string;
+  /** The SHA-1 of the snapshot it took, if any. */
+  snapshot?: string;
+};
+
+/** An origin and its last archival visits. */
+export type OriginVisits = {
+  /** The origin URL, normalized as the archive names it. */
+  origin: string;
+  /** Its visits, most recent first; none when it is not archived. */
+  visits: Visit[];
+};
+
+/** A save request, as the archive answered it. */
+export type SaveRequest = {
+  /** The origin URL the request is for. */
+  origin: string;
+  /** Where the request stands, e.g. `accepted`, or `pending` while it awaits review. */
+  status: string;
+};
 
 /** The SWHID of a file, directory or range of lines. */
-export interface SwhidInfo {
+export type SwhidInfo = {
   /** The qualified SWHID: the core SWHID with its context qualifiers (origin, visit, anchor, path, lines). */
   swhid: string;
   /** The core SWHID, without qualifiers, e.g. `swh:1:cnt:…`. */
@@ -47,10 +73,10 @@ export interface SwhidInfo {
   version?: string;
   /** Why the archive was not asked: the SWHID then comes from Git alone. */
   unchecked?: string;
-}
+};
 
 /** A file or directory of the tracked working tree, with its archival status. */
-export interface TreeNode {
+export type TreeNode = {
   /** The path relative to the repository root, with `/` separators; `.` for the root. */
   path: string;
   /** The core SWHID: `dir` for a directory, `cnt` for a file, `rev` for a submodule's commit. */
@@ -59,7 +85,7 @@ export interface TreeNode {
   dir: boolean;
   /** Whether the archive holds it, itself or through an archived directory above it. */
   archived: boolean;
-}
+};
 
 /**
  * What {@link Swh} needs from its host: settings and callbacks.
@@ -68,7 +94,7 @@ export interface TreeNode {
  * The extension passes functions that read VS Code's settings and secret
  * storage; the tests pass fixed values.
  */
-export interface SwhDeps {
+export type SwhDeps = {
   /** The archive's web root, e.g. `https://archive.softwareheritage.org`; read at each request. */
   archiveUrl(): string;
   /** The API token to send with each request. */
@@ -77,4 +103,4 @@ export interface SwhDeps {
   onRateLimit?(): void;
   /** The Git runner to use. */
   git: Git;
-}
+};
