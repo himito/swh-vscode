@@ -19,6 +19,7 @@
 import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
 import { core, isPublicOrigin, RATE_LIMIT_MESSAGE, Swh } from '../core';
+import type { Maybe } from '../core/types';
 import { config, currentDir, fileEditor } from './helpers';
 
 /**
@@ -107,12 +108,16 @@ export class StatusBar implements vscode.Disposable {
         if (doc === vscode.window.activeTextEditor?.document) void this.update(true);
       }),
       vscode.workspace.onDidChangeTextDocument((e) => {
-        // a modified file: nothing to tell until it is saved
-        if (e.document === vscode.window.activeTextEditor?.document && e.document.isDirty) this.render();
+        // modified, or back to its saved state by undo: only the tooltip changes
+        if (e.document === vscode.window.activeTextEditor?.document) this.render();
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.update()),
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('swh')) void this.update();
+        if (e.affectsConfiguration('swh.archiveUrl')) {
+          // another archive: none of the previous answers hold
+          this.swh.forgetAll();
+          this.forget();
+        } else if (e.affectsConfiguration('swh')) void this.update();
       }),
     );
   }
@@ -146,7 +151,7 @@ export class StatusBar implements vscode.Disposable {
    * @returns The real path, whether it is a directory, and whether its editor
    * has unsaved changes; undefined when there is nothing to show.
    */
-  private async modePath(): Promise<{ path: string; dir: boolean; dirty: boolean } | undefined> {
+  private async modePath(): Promise<Maybe<{ path: string; dir: boolean; dirty: boolean }>> {
     const editor = fileEditor();
     let p: string;
     let dir = false;
@@ -175,7 +180,8 @@ export class StatusBar implements vscode.Disposable {
    * @remarks
    * A file is checked again only when its modification time differs from
    * the one it was checked at, unless `force` is set. A file with unsaved
-   * changes is not checked: the item keeps the status of the file on disk.
+   * changes is not checked: the item keeps the status of the file on disk,
+   * or stays hidden until the file is saved when no status is known yet.
    * The check runs in the background; the item shows `pending` meanwhile.
    *
    * @param force - Check the file even when it has not changed since its last check.

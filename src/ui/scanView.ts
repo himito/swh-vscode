@@ -20,6 +20,7 @@ import * as vscode from 'vscode';
 import { browseUrl, buildScan, Scan, ScanItem, scanSummary, shortSwhid, Swh, typeOf, UserError } from '../core';
 import { config, info, openUrl } from './helpers';
 import { openSwhidUri } from './reports';
+import type { Maybe } from '../core/types';
 
 /** The icon and its theme color for each scan status: a codicon name and a theme color id. */
 const ICONS = {
@@ -37,7 +38,7 @@ const ICONS = {
  */
 export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Disposable {
   /** Fires when the tree changes: a scan starts, ends or fails. */
-  private emitter = new vscode.EventEmitter<ScanItem | undefined>();
+  private emitter = new vscode.EventEmitter<Maybe<ScanItem>>();
   /** The event VS Code listens to, to redraw the tree. */
   readonly onDidChangeTreeData = this.emitter.event;
   /** The tree view this provider fills. */
@@ -67,6 +68,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
     this.view = vscode.window.createTreeView('swh.scan', { treeDataProvider: this, showCollapseAll: true });
     this.disposables.push(
       this.view,
+      this.emitter,
       this.view.onDidExpandElement((e) => this.expanded.add(e.element)),
       this.view.onDidCollapseElement((e) => this.expanded.delete(e.element)),
     );
@@ -100,7 +102,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * @param item - The item whose parent to give.
    * @returns Its parent directory; undefined for the root.
    */
-  getParent(item: ScanItem): ScanItem | undefined {
+  getParent(item: ScanItem): Maybe<ScanItem> {
     return item.parent;
   }
 

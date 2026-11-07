@@ -34,6 +34,7 @@ import {
 } from '../core';
 import type { Reports } from './reports';
 import { ask, busy, config, currentDir, fileEditor, info, openUrl, realpath, selectionLines } from './helpers';
+import type { Maybe } from '../core/types';
 
 /**
  * What a SWHID command produces.
@@ -109,7 +110,7 @@ export class Commands {
    * when there is no repository, no remote, or the remote is not a public
    * URL.
    */
-  async localOrigin(): Promise<string | undefined> {
+  async localOrigin(): Promise<Maybe<string>> {
     let dir: string;
     try {
       dir = await realpath(currentDir());
@@ -166,7 +167,7 @@ export class Commands {
    * @throws {@link Cancelled} when the user dismisses the input box.
    * @throws {@link UserError} when the URL entered is not valid, see {@link Commands.readOrigin}.
    */
-  async originArg(verb: string, force: boolean): Promise<string | undefined> {
+  async originArg(verb: string, force: boolean): Promise<Maybe<string>> {
     const local = await this.localOrigin();
     if (!force && local) return undefined;
     return this.readOrigin(local ? `Origin to ${verb}` : `No public origin here; origin to ${verb}`, local);
@@ -402,7 +403,7 @@ export class Commands {
    * @param p - The target's path, for the Markdown link's text and the citation's repository.
    * @returns The text, and its label for the messages, e.g. "qualified SWHID".
    */
-  private async swhidText(info: SwhidInfo, lines: string | undefined, what: What, bare: boolean, p: string): Promise<[string, string]> {
+  private async swhidText(info: SwhidInfo, lines: Maybe<string>, what: What, bare: boolean, p: string): Promise<[string, string]> {
     if (what === 'bibtex') {
       const [entry, why] = await bibtex(this.swh, info, lines, await this.swh.git.root(p));
       return [entry, citationWhat(why)];

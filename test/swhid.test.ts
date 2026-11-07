@@ -20,6 +20,7 @@ import {
   findSwhids,
   normalizeOrigin,
   originCandidates,
+  originName,
   pathOrigin,
   qualifiers,
   qualify,
@@ -79,6 +80,9 @@ test('helpers', () => {
   assert.deepEqual(ancestors('a.txt'), ['.']);
   assert.deepEqual(ancestors('a/b/c.txt'), ['.', 'a', 'a/b']);
   assert.equal(shortSwhid('swh:1:cnt:0123456789abcdef0123456789abcdef01234567;lines=1'), 'swh:1:cnt:0123456789;lines=1');
+  assert.equal(originName('https://github.com/bzg/swh.el'), 'swh.el');
+  assert.equal(originName('https://gitlab.com/a/repo.git/'), 'repo');
+  assert.equal(originName('C:\\Users\\me\\repo.git'), 'repo');
 });
 
 // SWHIDs are found in text with their qualifiers but without trailing

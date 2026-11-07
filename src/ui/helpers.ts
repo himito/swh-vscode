@@ -16,6 +16,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Cancelled, UserError } from '../core';
+import type { Maybe } from '../core/types';
 
 /**
  * The extension's settings, the `swh.*` section of the configuration.
@@ -135,7 +136,7 @@ export function currentDir(): string {
  * @returns The active editor, or `undefined` when there is none or it shows
  * an untitled, virtual or remote document.
  */
-export function fileEditor(): vscode.TextEditor | undefined {
+export function fileEditor(): Maybe<vscode.TextEditor> {
   const editor = vscode.window.activeTextEditor;
   return editor?.document.uri.scheme === 'file' && !editor.document.isUntitled ? editor : undefined;
 }
@@ -157,7 +158,7 @@ export function fileEditor(): vscode.TextEditor | undefined {
  * @returns `"A-B"`, `"A"` for a single line, or `undefined` when the
  * selection is empty.
  */
-export function selectionLines(editor: vscode.TextEditor): string | undefined {
+export function selectionLines(editor: vscode.TextEditor): Maybe<string> {
   const sel = editor.selection;
   if (sel.isEmpty) return undefined;
   const from = sel.start.line + 1;

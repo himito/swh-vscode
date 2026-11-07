@@ -14,6 +14,7 @@
  */
 
 import { UserError } from './http';
+import type { Maybe } from './types';
 
 /**
  * The object types a core SWHID can name.
@@ -370,7 +371,7 @@ export function qualifiers(swhid: string): Record<string, string> {
 export function ancestors(path: string): string[] {
   if (path === '.') return [];
   const acc = ['.'];
-  let dir: string | undefined;
+  let dir: Maybe<string>;
   for (const part of path.split('/').slice(0, -1)) {
     dir = dir ? `${dir}/${part}` : part;
     acc.push(dir);
@@ -395,7 +396,10 @@ export function formatDate(date: string): string {
 /**
  * Gives the repository's name in an origin URL: its last path segment.
  *
- * @param origin - An origin URL.
+ * @remarks
+ * Splits on `\\` too, so that a local Windows path names its directory.
+ *
+ * @param origin - An origin URL, or a local path for a non-public remote.
  * @returns The last segment, without a `.git` suffix.
  *
  * @example
@@ -404,7 +408,7 @@ export function formatDate(date: string): string {
  * ```
  */
 export function originName(origin: string): string {
-  const parts = origin.replace(/\/+$/, '').split('/');
+  const parts = origin.replace(/[\\/]+$/, '').split(/[\\/]/);
   return parts[parts.length - 1].replace(/\.git$/, '');
 }
 

@@ -10,6 +10,7 @@ import { NOT_JSON, Resp, UserError, is2xx, headerNumber, retrieve } from '../htt
 import { baseUrl } from '../swhid';
 import { now } from './memo';
 import type { SwhDeps } from './types';
+import type { Maybe } from '../types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -72,7 +73,7 @@ export class SwhClient {
    * @param timeout - Seconds to wait for the answer.
    * @returns The response, or `null` when the server cannot be reached in time.
    */
-  private async retrieve(method: string, url: string, body: string | undefined, headers: Record<string, string>, timeout = 60) {
+  private async retrieve(method: string, url: string, body: Maybe<string>, headers: Record<string, string>, timeout = 60) {
     const tracked = url.startsWith(this.apiUrl('')) && !headers.Authorization;
     const resp = await retrieve(method, url, body, headers, timeout);
     if (resp && tracked) {
@@ -96,7 +97,7 @@ export class SwhClient {
    * @returns `used/limit`, e.g. `48/120`, or `undefined` when not known or
    * when its window has ended.
    */
-  rateLimitText(): string | undefined {
+  rateLimitText(): Maybe<string> {
     const r = this.rateLimit;
     return r && now() < r.reset ? `${r.used}/${r.limit}` : undefined;
   }

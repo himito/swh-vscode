@@ -10,6 +10,8 @@
  * @packageDocumentation
  */
 
+import type { Maybe } from './types';
+
 /**
  * The {@link Resp.body} of a response whose body is not JSON.
  *
@@ -74,7 +76,7 @@ export interface Resp {
  * @returns The number the header's value starts with, or `undefined` when
  * the header is missing or does not start with a number.
  */
-export function headerNumber(headers: Headers, name: string): number | undefined {
+export function headerNumber(headers: Headers, name: string): Maybe<number> {
   const m = /^ *([0-9]+)/.exec(headers.get(name) ?? '');
   return m ? Number(m[1]) : undefined;
 }
@@ -108,7 +110,7 @@ export function is2xx(resp: Resp | null | undefined): boolean {
 export async function retrieve(
   method: string,
   url: string,
-  body: string | undefined,
+  body: Maybe<string>,
   headers: Record<string, string>,
   timeout = 60,
 ): Promise<Resp | null> {

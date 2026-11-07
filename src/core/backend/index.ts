@@ -23,9 +23,10 @@ import { ancestors, core, isPublicOrigin, typeOf } from '../swhid';
 import { forgetNegatives } from './memo';
 import { SwhSwhids } from './swhids';
 import type { TreeNode } from './types';
+import type { Maybe } from '../types';
 
 export { RATE_LIMIT_MESSAGE } from './client';
-export type { OriginInfo, SwhDeps, SwhidInfo, TreeNode } from './types';
+export type { OriginInfo, SwhDeps, SwhidInfo, Token, TreeNode } from './types';
 
 /**
  * The Software Heritage client: archival status, SWHIDs, visits, save
@@ -89,8 +90,22 @@ export class Swh extends SwhSwhids {
    * archive holds stays remembered.
    */
   refresh(): void {
+    this.memoEpoch++;
     this.originMemo.clear();
     forgetNegatives(this.knownMemo);
+  }
+
+  /**
+   * Forget every answer of the archive, what it holds included.
+   *
+   * @remarks
+   * For when the archive itself changes, e.g. the `swh.archiveUrl` setting:
+   * the answers of the previous archive do not hold for the new one.
+   */
+  forgetAll(): void {
+    this.memoEpoch++;
+    this.originMemo.clear();
+    this.knownMemo.clear();
   }
 
   // ---------------------------------------------------------------- why not archived
@@ -109,7 +124,7 @@ export class Swh extends SwhSwhids {
    * `undefined` when nothing prevents it (it may simply not be archived
    * since the last push) or the path is outside a repository.
    */
-  async unarchivedWhy(p: string): Promise<string | undefined> {
+  async unarchivedWhy(p: string): Promise<Maybe<string>> {
     const root = await this.git.root(p);
     if (!root) return undefined;
     const rel = relativePath(root, p);

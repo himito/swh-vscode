@@ -15,6 +15,7 @@
 
 import * as vscode from 'vscode';
 import { config } from './helpers';
+import type { Maybe } from '../core/types';
 
 /** An entry of the menu: a group, a command, or the *Without context* switch. */
 interface Entry {
@@ -76,16 +77,37 @@ const MENU: Entry[] = [
 ];
 
 /**
+ * Sets `swh.swhidWithoutContext`, as the Menu view's checkbox does.
+ *
+ * @remarks
+ * The value is written to the workspace settings when they already define
+ * it, else to the user's global settings: writing the global value under a
+ * workspace value would change nothing. A failed write is reported to the
+ * user.
+ *
+ * @param value - Whether to copy SWHIDs without their context qualifiers.
+ */
+async function setWithoutContext(value: boolean): Promise<void> {
+  const inWorkspace = config().inspect<boolean>('swhidWithoutContext')?.workspaceValue !== undefined;
+  const target = inWorkspace ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+  try {
+    await config().update('swhidWithoutContext', value, target);
+  } catch (e) {
+    void vscode.window.showErrorMessage(`Software Heritage: ${(e as Error)?.message ?? e}`);
+  }
+}
+
+/**
  * The data provider of the Menu view.
  *
  * @remarks
  * The *Without context* checkbox writes the `swh.swhidWithoutContext`
- * setting in the user's global settings. The view also redraws when that
+ * setting, see {@link setWithoutContext}. The view also redraws when that
  * setting changes elsewhere, so the checkbox always reflects it.
  */
 export class MenuView implements vscode.TreeDataProvider<Entry>, vscode.Disposable {
   /** Fires when the menu must be redrawn: the switch's setting changed. */
-  private emitter = new vscode.EventEmitter<Entry | undefined>();
+  private emitter = new vscode.EventEmitter<Maybe<Entry>>();
   /** The event VS Code listens to, to redraw the menu. */
   readonly onDidChangeTreeData = this.emitter.event;
   /** The view and the event listeners, disposed of with the provider. */
@@ -96,15 +118,10 @@ export class MenuView implements vscode.TreeDataProvider<Entry>, vscode.Disposab
     const view = vscode.window.createTreeView('swh.actions', { treeDataProvider: this });
     this.disposables.push(
       view,
+      this.emitter,
       view.onDidChangeCheckboxState(async (e) => {
         for (const [entry, state] of e.items) {
-          if (entry.toggle) {
-            await config().update(
-              'swhidWithoutContext',
-              state === vscode.TreeItemCheckboxState.Checked,
-              vscode.ConfigurationTarget.Global,
-            );
-          }
+          if (entry.toggle) await setWithoutContext(state === vscode.TreeItemCheckboxState.Checked);
         }
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {

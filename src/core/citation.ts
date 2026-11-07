@@ -14,6 +14,7 @@ import * as path from 'path';
 import type { Swh, SwhidInfo } from './backend';
 import { is2xx, UserError } from './http';
 import { core, encodeOrigin, hashOf, isPublicOrigin, originName, qualifiers, queryString, shortHash, typeOf } from './swhid';
+import type { Maybe } from './types';
 
 /**
  * What the archive answered to a citation request.
@@ -91,7 +92,7 @@ export function citation(
 ): [string, Why] {
   if (typeof answer === 'object') return [answer.entry, 'archive'];
   const d = date?.substring(0, 10);
-  const fields: Array<[string, string | undefined]> = [
+  const fields: Array<[string, Maybe<string>]> = [
     ['title', title],
     ['url', url],
     ['date', d],
@@ -126,7 +127,7 @@ export function citation(
  * @throws {@link UserError} when the archive cannot be reached, or its rate
  * limit is reached.
  */
-export async function bibtex(swh: Swh, info: SwhidInfo, lines: string | undefined, root: string | undefined): Promise<[string, Why]> {
+export async function bibtex(swh: Swh, info: SwhidInfo, lines: Maybe<string>, root: Maybe<string>): Promise<[string, Why]> {
   const answer: CitationAnswer = info.archived ? await archiveCitation(swh, info.swhid) : 'not-archived';
   const origin = info.origin;
   const anchor = qualifiers(info.swhid).anchor;

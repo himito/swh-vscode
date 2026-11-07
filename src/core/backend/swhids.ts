@@ -13,11 +13,12 @@ import { core, hashOf, isPublicOrigin, qualify } from '../swhid';
 import { memoPut, uniq } from './memo';
 import { SwhOrigins } from './origins';
 import type { SwhidInfo } from './types';
+import type { Maybe } from '../types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** Number of the most recent commits that are considered as a SWHID's anchor. */
-const ANCHOR_CANDIDATES_MAX = 100;
+export const ANCHOR_CANDIDATES_MAX = 100;
 
 /** SWHIDs of files and directories; see {@link Swh}. */
 export class SwhSwhids extends SwhOrigins {
@@ -37,7 +38,7 @@ export class SwhSwhids extends SwhOrigins {
    * @throws {@link UserError} when Git cannot hash the file, or the
    * repository uses SHA-256.
    */
-  async contentSwhid(file: string, root: string | undefined): Promise<string> {
+  async contentSwhid(file: string, root: Maybe<string>): Promise<string> {
     const hash = root
       ? await this.git.get(root, ['hash-object', '--path', relativePath(root, file), '--', file])
       : await this.git.get(path.dirname(file), ['hash-object', '--no-filters', '--', file]);
@@ -66,7 +67,7 @@ export class SwhSwhids extends SwhOrigins {
    * @param type - Only an object of that type: `blob` for a file, `tree` for a directory.
    * @returns The object's hash, or `undefined` when there is none (of that type).
    */
-  private async objectAt(root: string, commit: string, rel: string, type?: 'blob' | 'tree'): Promise<string | undefined> {
+  private async objectAt(root: string, commit: string, rel: string, type?: 'blob' | 'tree'): Promise<Maybe<string>> {
     const object = rel === '.' ? `${commit}^{tree}` : `${commit}:${rel}`;
     const hash = await this.git.get(root, ['rev-parse', '--verify', '-q', object]);
     if (!hash) return undefined;
@@ -147,7 +148,7 @@ export class SwhSwhids extends SwhOrigins {
    * @returns The commit's hash, or `undefined` when no archived commit holds it.
    * @throws {@link UserError} as {@link Swh.rememberKnown} does.
    */
-  private async anchor(root: string, rel: string, coreSwhid: string): Promise<string | undefined> {
+  private async anchor(root: string, rel: string, coreSwhid: string): Promise<Maybe<string>> {
     const hash = hashOf(coreSwhid);
     const commits = await this.anchorCandidates(root, rel, hash);
     await this.rememberKnown([coreSwhid, ...commits.map((c) => core('rev', c))]);
@@ -187,7 +188,7 @@ export class SwhSwhids extends SwhOrigins {
    * the directory is tracked.
    * @throws {@link UserError} as {@link Swh.worktreeTree} does.
    */
-  private async dirSwhid(dir: string, root: string): Promise<string | undefined> {
+  private async dirSwhid(dir: string, root: string): Promise<Maybe<string>> {
     const hash = await this.objectAt(root, await this.worktreeTree(root), relativePath(root, dir));
     return hash ? core('dir', hash) : undefined;
   }
@@ -201,7 +202,7 @@ export class SwhSwhids extends SwhOrigins {
    * @throws {@link UserError} for a directory outside a repository or with
    * nothing tracked, or when Git fails.
    */
-  async worktreeSwhid(file: string, root: string | undefined): Promise<string> {
+  async worktreeSwhid(file: string, root: Maybe<string>): Promise<string> {
     if ((await fs.stat(file)).isDirectory()) {
       if (!root) throw new UserError('Not inside a Git repository');
       const swhid = await this.dirSwhid(file, root);
@@ -245,13 +246,13 @@ export class SwhSwhids extends SwhOrigins {
    * @returns Its core SWHID, its anchor commit if any, and whether it is archived.
    * @throws {@link UserError} when Git or the archive fails.
    */
-  private async worktreeTarget(root: string | undefined, rel: string | undefined, pub: boolean, worktree: () => Promise<string>) {
+  private async worktreeTarget(root: Maybe<string>, rel: Maybe<string>, pub: boolean, worktree: () => Promise<string>) {
     const c = await worktree();
     return {
       core: c,
       anchor: pub && root ? await this.anchor(root, rel!, c) : undefined,
       archived: pub || !root ? await this.archivedP(c) : false,
-      version: undefined as string | undefined,
+      version: undefined as Maybe<string>,
     };
   }
 
@@ -271,8 +272,8 @@ export class SwhSwhids extends SwhOrigins {
    */
   private async directSwhid(
     file: string,
-    root: string | undefined,
-    lines: string | undefined,
+    root: Maybe<string>,
+    lines: Maybe<string>,
     archivedVersion: boolean,
     worktree: () => Promise<string>,
   ): Promise<SwhidInfo> {
@@ -356,10 +357,12 @@ export class SwhSwhids extends SwhOrigins {
    *
    * @param dir - The directory's real path.
    * @param root - The repository's root directory.
-   * @returns The tree's hash, or `undefined` when a tracked file in the
-   * directory differs from HEAD, in the working tree or in the index.
+   * @returns The tree's hash, or `undefined` when there is no HEAD commit,
+   * or a tracked file in the directory differs from HEAD, in the working tree
+   * or in the index.
+   * @throws {@link UserError} when Git cannot tell where the index is.
    */
-  async headTree(dir: string, root: string): Promise<string | undefined> {
+  async headTree(dir: string, root: string): Promise<Maybe<string>> {
     // in a copy: refreshing the dates writes the index
     return this.git.withIndexCopy(root, async (env) => {
       await this.git.run(root, ['update-index', '-q', '--refresh'], { env });

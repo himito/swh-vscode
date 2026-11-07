@@ -28,6 +28,20 @@
     "bibtex"
   ],
   "main": "./out/src/extension.js",
+  "icon": "assets/swh-logo-128.png",
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "test": "tsc -p . && node --test \"out/test/*.test.js\"",
+    "vscode:prepublish": "npm run compile",
+    "smoke": "tsc -p . && node out/test/smoke/run.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^3.1.0",
+    "typescript": "^5.4.0"
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -344,19 +358,5 @@
         }
       ]
     }
-  },
-  "scripts": {
-    "compile": "tsc -p .",
-    "watch": "tsc -watch -p .",
-    "test": "tsc -p . && node --test \"out/test/*.test.js\"",
-    "vscode:prepublish": "npm run compile",
-    "smoke": "tsc -p . && node out/test/smoke/run.js"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.90.0",
-    "@vscode/test-electron": "^3.1.0",
-    "typescript": "^5.4.0"
-  },
-  "icon": "assets/swh-logo-128.png"
+  }
 }

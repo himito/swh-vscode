@@ -4,8 +4,9 @@
  *
  * @remarks
  * VS Code calls {@link activate} once, after startup (see `activationEvents`
- * in `package.json`). Every command, view and provider declared in
- * `package.json` must be registered here. Everything created is added to the
+ * in `package.json`). Every command declared in `package.json` must be
+ * registered here, and every view and provider created here. Everything
+ * created is added to the
  * extension context's subscriptions, so VS Code disposes of it on
  * deactivation.
  *
@@ -15,10 +16,12 @@
 import * as vscode from 'vscode';
 import { Git, type ScanItem, Swh } from './core';
 import {
+  ApiToken,
   command,
   CommandArg,
   Commands,
   config,
+  envToken,
   info,
   MenuView,
   REPORT_SCHEME,
@@ -27,40 +30,28 @@ import {
   StatusBar,
   SwhidLinks,
 } from './ui';
-
-/** The key of the API token in VS Code's secret storage. */
-const TOKEN_KEY = 'swh.apiToken';
+import type { Maybe } from './core/types';
 
 /**
  * Activates the extension.
  *
  * @remarks
- * The API token comes from the `SWH_API_TOKEN` environment variable when it
- * is set, else from VS Code's secret storage (see the `swh.setToken`
- * command). The stored token is read once and cached until it changes.
+ * The API token comes from {@link ApiToken}: the `SWH_API_TOKEN` environment
+ * variable, else VS Code's secret storage (see the `swh.setToken` command).
  * Settings are read on each use, so changing them needs no reload.
  *
  * @param context - The extension context, which owns everything registered.
  */
 export function activate(context: vscode.ExtensionContext) {
-  // the API token: the environment's, else the stored one, cached
-  const tokenOrUndefined = (t: string | undefined) => (t && t.trim() ? t.trim() : undefined);
-  let stored: Promise<string | undefined> | undefined;
-  const token = () =>
-    Promise.resolve(tokenOrUndefined(process.env.SWH_API_TOKEN)).then(
-      (env) => env ?? (stored ??= Promise.resolve(context.secrets.get(TOKEN_KEY)).then(tokenOrUndefined)),
-    );
-  context.subscriptions.push(
-    context.secrets.onDidChange((e) => {
-      if (e.key === TOKEN_KEY) stored = undefined;
-    }),
-  );
+  // the API token, in VS Code's secret storage
+  const apiToken = new ApiToken(context.secrets);
+  context.subscriptions.push(apiToken);
 
   // the backend, configured by the settings
-  let statusBar: StatusBar | undefined;
+  let statusBar: Maybe<StatusBar>;
   const swh = new Swh({
     archiveUrl: () => config().get<string>('archiveUrl', 'https://archive.softwareheritage.org'),
-    token,
+    token: () => apiToken.get(),
     onRateLimit: () => statusBar?.render(),
     git: new Git(() => config().get<string>('gitPath', 'git') || 'git'),
   });
@@ -106,17 +97,18 @@ export function activate(context: vscode.ExtensionContext) {
       ignoreFocusOut: true,
     });
     if (value === undefined) return;
-    await context.secrets.store(TOKEN_KEY, value.trim());
-    stored = undefined;
+    if (!(await apiToken.store(value))) {
+      info('Software Heritage API token cleared: the value was blank');
+      return;
+    }
     info(
-      process.env.SWH_API_TOKEN
+      envToken()
         ? 'Token stored; SWH_API_TOKEN, set in the environment, still takes precedence'
         : 'Software Heritage API token stored',
     );
   });
   reg('swh.clearToken', async () => {
-    await context.secrets.delete(TOKEN_KEY);
-    stored = undefined;
+    await apiToken.clear();
     info('Software Heritage API token cleared');
   });
 
@@ -129,6 +121,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     statusBar,
     scan,
+    reports,
     new MenuView(),
     vscode.workspace.registerTextDocumentContentProvider(REPORT_SCHEME, reports),
     vscode.languages.registerDocumentLinkProvider([{ scheme: 'file' }, { scheme: 'untitled' }, { scheme: REPORT_SCHEME }], new SwhidLinks()),

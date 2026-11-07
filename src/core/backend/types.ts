@@ -5,6 +5,10 @@
  */
 
 import type { Git } from '../git';
+import type { Maybe } from '../types';
+
+/** An API token, or `undefined` to make anonymous requests. */
+export type Token = Maybe<string>;
 
 /** The archival status of a repository's origin. */
 export interface OriginInfo {
@@ -67,8 +71,8 @@ export interface TreeNode {
 export interface SwhDeps {
   /** The archive's web root, e.g. `https://archive.softwareheritage.org`; read at each request. */
   archiveUrl(): string;
-  /** The API token, or `undefined` to make anonymous requests. */
-  token(): Promise<string | undefined>;
+  /** The API token to send with each request. */
+  token(): Promise<Token>;
   /** Called whenever the tokenless rate limit is updated, see {@link Swh.rateLimit}. */
   onRateLimit?(): void;
   /** The Git runner to use. */

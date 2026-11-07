@@ -4,6 +4,8 @@
  * @packageDocumentation
  */
 
+import type { Maybe } from '../types';
+
 /** Seconds during which an archive answer that may change is trusted. */
 export const MEMO_TTL = 600;
 
@@ -43,7 +45,7 @@ export const now = () => Date.now() / 1000;
  * @param ttl - The time to live, in seconds.
  * @returns `true` when `time` is recent enough.
  */
-export const fresh = (time: number | undefined, ttl: number) => time !== undefined && now() - time < ttl;
+export const fresh = (time: Maybe<number>, ttl: number) => time !== undefined && now() - time < ttl;
 
 /**
  * The distinct elements of an array, in their first order.

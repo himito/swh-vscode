@@ -15,12 +15,13 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { UserError } from './http';
+import type { Maybe } from './types';
 
 /** The result of a Git command. */
 export interface GitResult {
   /** The exit status: 0 on success, -1 when Git could not be run at all. */
   status: number;
-  /** The standard output (and error, if asked for), trimmed. */
+  /** The standard output (and error, if asked for), without its final newlines. */
   out: string;
 }
 
@@ -68,8 +69,10 @@ export class Git {
       child.stderr.setEncoding('utf8').on('data', (d: string) => {
         if (opts.stderr) out += d;
       });
-      child.on('error', () => resolve({ status: -1, out: out.trim() }));
-      child.on('close', (code) => resolve({ status: code ?? -1, out: out.trim() }));
+      // only the final newlines: a path may end with a space
+      const output = () => out.replace(/[\r\n]+$/, '');
+      child.on('error', () => resolve({ status: -1, out: output() }));
+      child.on('close', (code) => resolve({ status: code ?? -1, out: output() }));
     });
   }
 
@@ -82,7 +85,7 @@ export class Git {
    * @returns The command's output, trimmed; `undefined` when it fails or
    * prints nothing.
    */
-  async get(dir: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string | undefined> {
+  async get(dir: string, args: string[], env?: NodeJS.ProcessEnv): Promise<Maybe<string>> {
     const r = await this.run(dir, args, { env });
     return r.status === 0 && r.out !== '' ? r.out : undefined;
   }
@@ -115,7 +118,7 @@ export class Git {
    * @returns The absolute path of the repository's working tree, or
    * `undefined` outside a repository (or inside its `.git` directory).
    */
-  async root(file: string): Promise<string | undefined> {
+  async root(file: string): Promise<Maybe<string>> {
     let dir = file;
     try {
       if (!(await fs.stat(file)).isDirectory()) dir = path.dirname(file);

@@ -24,7 +24,7 @@ export const REPORT_SCHEME = 'swh-report';
  * Registered for {@link REPORT_SCHEME}. Showing a report again with the same
  * name replaces its content in place.
  */
-export class Reports implements vscode.TextDocumentContentProvider {
+export class Reports implements vscode.TextDocumentContentProvider, vscode.Disposable {
   /** The content of each report, by URI path. */
   private contents = new Map<string, string>();
   /** Fires when a report's content changes. */
@@ -56,6 +56,12 @@ export class Reports implements vscode.TextDocumentContentProvider {
     const doc = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true, preview: true });
   }
+
+  /** Forgets the reports and stops telling VS Code of changes. */
+  dispose(): void {
+    this.contents.clear();
+    this.emitter.dispose();
+  }
 }
 
 /**
@@ -66,11 +72,16 @@ export class Reports implements vscode.TextDocumentContentProvider {
  * through the `swh.openSwhid` command keeps the SWHID's percent-encoded
  * qualifiers intact, which an `https:` URI would not.
  *
+ * The query is built with `Uri.from`, not `Uri.parse`: VS Code's command
+ * opener runs `decodeURIComponent` on the URI's already decoded query, so a
+ * query that `Uri.parse` decodes once would be decoded twice, turning e.g.
+ * `path=/a%3Bb` into `path=/a;b`.
+ *
  * @param swhid - The SWHID, with or without qualifiers.
  * @returns A `command:swh.openSwhid?…` URI.
  */
 export const openSwhidUri = (swhid: string) =>
-  vscode.Uri.parse(`command:swh.openSwhid?${encodeURIComponent(JSON.stringify([swhid]))}`);
+  vscode.Uri.from({ scheme: 'command', path: 'swh.openSwhid', query: encodeURIComponent(JSON.stringify([swhid])) });
 
 /**
  * Makes the SWHIDs in documents clickable links that open them in the archive.

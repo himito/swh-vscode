@@ -1,10 +1,12 @@
 /**
- * The extension's VS Code side: the commands, the Menu view, the status bar,
- * the reports and the shared helpers.
+ * The extension's VS Code side: the commands, the Menu and Scan views, the
+ * status bar, the reports and SWHID links, the API token, and the shared
+ * helpers.
  *
  * @packageDocumentation
  */
 
+export * from './apiToken';
 export * from './commands';
 export * from './helpers';
 export * from './menuView';
