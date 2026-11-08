@@ -31,7 +31,6 @@ import { ancestors, type Maybe, UserError } from '#core/shared';
 import { relativePath } from '#core/git';
 import { isPublicOrigin } from '#core/origin';
 import { Swhid } from '#core/swhid';
-import { forgetNegatives } from './memo';
 import { SwhSwhids } from './swhids';
 import type { TreeNode } from './types';
 
@@ -102,9 +101,8 @@ export class Swh extends SwhSwhids {
    * archive holds stays remembered.
    */
   refresh(): void {
-    this.memoEpoch++;
     this.originMemo.clear();
-    forgetNegatives(this.knownMemo);
+    this.knownMemo.forget((known) => !known);
   }
 
   /**
@@ -115,7 +113,6 @@ export class Swh extends SwhSwhids {
    * the answers of the previous archive do not hold for the new one.
    */
   forgetAll(): void {
-    this.memoEpoch++;
     this.originMemo.clear();
     this.knownMemo.clear();
   }

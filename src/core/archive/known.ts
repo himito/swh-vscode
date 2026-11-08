@@ -6,8 +6,8 @@
 
 import type { Git } from '#core/git';
 import type { Swhid } from '#core/swhid';
-import type { Maybe } from '#core/shared';
-import { Memo, memoGet, memoPut, now, uniq, UNKNOWN } from './memo';
+import { type Maybe, now, uniq } from '#core/shared';
+import { Memo, MEMO_TTL } from './memo';
 import type { ArchiveApi } from './archiveApi';
 import type { SwhDeps } from './types';
 
@@ -17,13 +17,12 @@ export class SwhKnown {
   readonly git: Git;
   /** The Software Heritage archive, see {@link ArchiveApi}. */
   readonly archive: ArchiveApi;
-  /** SWHID, as its canonical text → whether the archive holds it; see `memoGet`. */
-  protected knownMemo: Memo<boolean> = new Map();
   /**
-   * Bumped whenever the memos forget answers: a request sent before then
-   * may bring an answer from before the change, which is then not stored.
+   * SWHID, as its canonical text → whether the archive holds it. What the
+   * archive holds stays there, for the session; what it does not hold may be
+   * archived later, so that is asked again after `MEMO_TTL` seconds.
    */
-  protected memoEpoch = 0;
+  protected readonly knownMemo = new Memo<boolean>({ ttl: MEMO_TTL, keepPositives: true });
 
   /**
    * Creates the client.
@@ -53,7 +52,7 @@ export class SwhKnown {
    * @returns `true` only when a remembered answer says so.
    */
   knownP(swhid: Swhid): boolean {
-    return memoGet(this.knownMemo, swhid.toString()) === true;
+    return this.knownMemo.get(swhid.toString()) === true;
   }
 
   /**
@@ -69,12 +68,11 @@ export class SwhKnown {
    */
   async rememberKnown(swhids: readonly Swhid[]): Promise<void> {
     const texts = uniq(swhids.map((swhid) => swhid.toString()));
-    const unknown = texts.filter((text) => memoGet(this.knownMemo, text) === UNKNOWN);
+    const unknown = texts.filter((text) => !this.knownMemo.has(text));
     if (!unknown.length) return;
-    const epoch = this.memoEpoch;
+    const asOf = this.knownMemo.generation;
     const answers = await this.archive.known(unknown);
-    if (epoch !== this.memoEpoch) return;
-    for (const [text, known] of answers) memoPut(this.knownMemo, text, known);
+    for (const [text, known] of answers) this.knownMemo.put(text, known, asOf);
   }
 
   /**
@@ -87,7 +85,7 @@ export class SwhKnown {
    * @param swhid - A core SWHID.
    */
   protected rememberArchived(swhid: Swhid): void {
-    memoPut(this.knownMemo, swhid.toString(), true);
+    this.knownMemo.put(swhid.toString(), true);
   }
 
   /**

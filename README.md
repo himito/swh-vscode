@@ -154,7 +154,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   │   ├── shared/      What every package uses; it imports no other
 │   │   │   ├── errors.ts      The error types: UserError, Cancelled
 │   │   │   ├── encoding.ts    Percent-encoding, query strings, base URLs
-│   │   │   ├── util.ts        Path ancestors and date formatting
+│   │   │   ├── util.ts        Path ancestors, dates, time, and array helpers
 │   │   │   └── types.ts       Shared type helpers, e.g. Maybe<T>
 │   │   ├── origin.ts    Origins: normalizing remote URLs, and their encodings
 │   │   ├── swhid/       SWHIDs, as value objects
@@ -172,7 +172,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   │   │   │   ├── httpArchiveApi.ts  Over the archive's Web API: requests, token, rate limit
 │   │   │   │   ├── http.ts            HTTP requests, through fetch
 │   │   │   │   └── json.ts            The archive's JSON answers, checked and mapped
-│   │   │   ├── memo.ts        Remembered answers
+│   │   │   ├── memo.ts        Memo: the archive's answers, remembered as long as they are trusted
 │   │   │   └── types.ts       The data it answers with, and what it needs from its host
 │   │   ├── citation/    Citations
 │   │   │   ├── bibtex.ts      BibtexEntry: the BibTeX format, its escaping
@@ -200,6 +200,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
     ├── swhid.test.ts        Unit tests: SWHIDs, origins, citations, the scan model
     ├── citation.test.ts     Unit tests: citing files and repositories, on a stub client
     ├── json.test.ts         Unit tests: the archive's JSON answers, mapped
+    ├── memo.test.ts         Unit tests: the memo's policies and stale answers, with a fake clock
     ├── fakeArchive.test.ts  Unit tests: the client on a fake ArchiveApi, without HTTP
     ├── repository.test.ts   Unit tests: the client on a temporary repository, fetch mocked
     └── smoke/               Smoke test in a real VS Code

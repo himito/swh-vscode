@@ -11,10 +11,9 @@
  * @packageDocumentation
  */
 
-import { baseUrl, type Maybe, queryString, UserError } from '#core/shared';
+import { baseUrl, type Maybe, now, partition, queryString, UserError } from '#core/shared';
 import { headerNumber, is2xx, NOT_JSON, type Resp, retrieve } from './http';
 import { pathOrigin } from '#core/origin';
-import { now, partition } from '../memo';
 import { type ArchiveApi, type CitationTarget, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from '../archiveApi';
 import type { CitationAnswer, SaveRequest, Token, Visit } from '../types';
 import { toCitationEntry, toKnown, toSaveRequest, toVisit, toVisits } from './json';

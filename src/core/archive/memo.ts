@@ -1,23 +1,38 @@
 /**
- * Remembered archive answers, and small helpers on time and arrays.
+ * Remembered archive answers, as the {@link Memo} class.
  *
  * @packageDocumentation
  */
 
-import type { Maybe } from '#core/shared';
+import { type Maybe, now } from '#core/shared';
 
 /** Seconds during which an archive answer that may change is trusted. */
 export const MEMO_TTL = 600;
 
-/** What a memo returns for a key it knows nothing about, or no longer trusts. */
-export const UNKNOWN = Symbol('unknown');
+/** How long a {@link Memo} trusts its answers. */
+export type MemoPolicy = {
+  /** The seconds an answer is trusted. */
+  ttl: number;
+  /**
+   * Whether a positive answer, a truthy one, is trusted for the whole
+   * session instead: e.g. what the archive holds stays there, while what it
+   * does not hold may be archived later.
+   */
+  keepPositives: boolean;
+};
+
+/**
+ * The state of a memo's answers, as {@link Memo.generation} gives it: it
+ * changes each time the memo forgets answers.
+ */
+export type Generation = number;
 
 /**
  * A remembered answer.
  *
  * @typeParam T - The type of the answer.
  */
-export type Entry<T> = {
+type Entry<T> = {
   /** When the answer was received, in epoch seconds. */
   time: number;
   /** The answer itself. */
@@ -25,95 +40,111 @@ export type Entry<T> = {
 };
 
 /**
- * Remembered answers, by key (a SWHID or a remote URL).
+ * Answers of the archive, remembered by key (a SWHID, a remote URL) and
+ * trusted as a {@link MemoPolicy} says.
  *
- * @typeParam T - The type of the answers.
- */
-export type Memo<T> = Map<string, Entry<T>>;
-
-/**
- * The current time.
+ * @remarks
+ * Asking the archive takes time, during which the memo may forget answers,
+ * e.g. on a refresh: an answer asked for before then may be out of date. So
+ * take the memo's {@link Memo.generation} before asking, and give it back
+ * to {@link Memo.put}, which then ignores an answer asked for before the
+ * memo forgot.
  *
- * @returns The number of seconds since the epoch.
- */
-export const now = () => Date.now() / 1000;
-
-/**
- * Whether a time is less than `ttl` seconds ago.
- *
- * @param time - The time, in epoch seconds; `undefined` is never fresh.
- * @param ttl - The time to live, in seconds.
- * @returns `true` when `time` is recent enough.
- */
-export const fresh = (time: Maybe<number>, ttl: number) => time !== undefined && now() - time < ttl;
-
-/**
- * The distinct elements of an array, in their first order.
- *
- * @param xs - The array.
- * @returns A new array without duplicates.
- */
-export const uniq = <T>(xs: T[]) => [...new Set(xs)];
-
-/**
- * Split an array into consecutive batches.
- *
- * @param xs - The array.
- * @param size - The size of each batch; the last one may be shorter.
- * @returns The batches, in order.
+ * @typeParam T - The type of the answers; never `undefined`, which means
+ * "not known".
  *
  * @example
  * ```ts
- * partition([1, 2, 3, 4, 5], 2); // [[1, 2], [3, 4], [5]]
+ * const known = new Memo<boolean>({ ttl: MEMO_TTL, keepPositives: true });
+ * const asOf = known.generation;
+ * const answer = await archive.known([swhid]);
+ * known.put(swhid, answer.get(swhid)!, asOf); // ignored if refreshed meanwhile
  * ```
  */
-export function partition<T>(xs: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let start = 0; start < xs.length; start += size) out.push(xs.slice(start, start + size));
-  return out;
-}
+export class Memo<T> {
+  /** The answers, by key. */
+  private readonly entries = new Map<string, Entry<T>>();
+  /** Bumped each time the memo forgets answers. */
+  private version: Generation = 0;
 
-/**
- * What a memo says of a key.
- *
- * @remarks
- * A positive answer (truthy value) holds for the session: a SWHID is
- * immutable, and what the archive holds stays there. A negative answer
- * holds for `MEMO_TTL` seconds only, as the archive may get the artifact
- * later.
- *
- * @param memo - The memo.
- * @param key - The key, e.g. a SWHID.
- * @returns The remembered value; `null` for a negative answer still
- * trusted; {@link UNKNOWN} when the memo cannot tell.
- */
-export function memoGet<T>(memo: Memo<T>, key: string): T | null | typeof UNKNOWN {
-  // a SWHID is immutable, but the archive may get the artifact later
-  const entry = memo.get(key);
-  if (!entry) return UNKNOWN;
-  if (entry.value) return entry.value;
-  return fresh(entry.time, MEMO_TTL) ? null : UNKNOWN;
-}
+  /**
+   * Creates an empty memo.
+   *
+   * @param policy - How long it trusts its answers.
+   */
+  constructor(private readonly policy: MemoPolicy) {}
 
-/**
- * Remember an answer, timestamped now.
- *
- * @param memo - The memo.
- * @param key - The key.
- * @param value - The answer.
- * @returns `value`, for chaining.
- */
-export function memoPut<T>(memo: Memo<T>, key: string, value: T): T {
-  memo.set(key, { time: now(), value });
-  return value;
-}
+  /** The state of the memo's answers, to give back to {@link Memo.put}. */
+  get generation(): Generation {
+    return this.version;
+  }
 
-/**
- * Forget the negative answers of a memo; the positive ones stay, as what
- * the archive holds stays there.
- *
- * @param memo - The memo.
- */
-export function forgetNegatives<T>(memo: Memo<T>) {
-  for (const [key, entry] of memo) if (!entry.value) memo.delete(key);
+  /**
+   * The answer remembered for a key, if it is still trusted.
+   *
+   * @param key - The key.
+   * @returns The answer; `undefined` when there is none, or it is no longer trusted.
+   */
+  get(key: string): Maybe<T> {
+    const entry = this.entries.get(key);
+    return entry && this.trusts(entry) ? entry.value : undefined;
+  }
+
+  /**
+   * Tells whether the memo has a trusted answer for a key.
+   *
+   * @param key - The key.
+   * @returns `true` when {@link Memo.get} gives an answer, even a negative one.
+   */
+  has(key: string): boolean {
+    const entry = this.entries.get(key);
+    return entry !== undefined && this.trusts(entry);
+  }
+
+  /**
+   * Remembers an answer, received now.
+   *
+   * @param key - The key.
+   * @param value - The answer.
+   * @param asOf - The memo's {@link Memo.generation} when the answer was
+   * asked for; the answer is ignored when the memo has forgotten answers since.
+   * @returns Whether the answer was remembered.
+   */
+  put(key: string, value: T, asOf: Generation = this.version): boolean {
+    if (asOf !== this.version) return false;
+    this.entries.set(key, { time: now(), value });
+    return true;
+  }
+
+  /**
+   * Forgets some answers.
+   *
+   * @remarks
+   * The {@link Memo.generation} changes even when no answer matches: an
+   * answer asked for before must still be ignored, as it may be out of date.
+   *
+   * @param which - Tells whether to forget an answer.
+   */
+  forget(which: (value: T) => boolean): void {
+    this.version++;
+    for (const [key, entry] of this.entries) if (which(entry.value)) this.entries.delete(key);
+  }
+
+  /** Forgets every answer. */
+  clear(): void {
+    this.version++;
+    this.entries.clear();
+  }
+
+  /**
+   * Tells whether an answer is still trusted.
+   *
+   * @param entry - The answer, and when it was received.
+   * @returns `true` for a positive answer the policy keeps for the session,
+   * or one received less than the policy's `ttl` seconds ago.
+   */
+  private trusts(entry: Entry<T>): boolean {
+    if (this.policy.keepPositives && entry.value) return true;
+    return now() - entry.time < this.policy.ttl;
+  }
 }

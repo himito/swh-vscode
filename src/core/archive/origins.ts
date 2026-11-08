@@ -8,7 +8,7 @@
 import { type Maybe, UserError } from '#core/shared';
 import { isPublicOrigin, normalizeOrigin, originCandidates } from '#core/origin';
 import { Swhid } from '#core/swhid';
-import { forgetNegatives, fresh, Memo, MEMO_TTL, memoPut } from './memo';
+import { Memo, MEMO_TTL } from './memo';
 import { SwhKnown } from './known';
 import type { OriginInfo, OriginVisits, SaveRequest, Visit } from './types';
 
@@ -17,8 +17,11 @@ export const VISITS_SHOWN = 10;
 
 /** Origins, visits and save requests; see {@link Swh}. */
 export class SwhOrigins extends SwhKnown {
-  /** Remote URL → origin info, trusted for `MEMO_TTL` seconds. */
-  protected originMemo: Memo<OriginInfo | null> = new Map();
+  /**
+   * Remote URL → the origin's status, trusted for `MEMO_TTL` seconds,
+   * archived or not: a visit may come at any time.
+   */
+  protected readonly originMemo = new Memo<OriginInfo>({ ttl: MEMO_TTL, keepPositives: false });
 
   // ---------------------------------------------------------------- origins
 
@@ -115,12 +118,13 @@ export class SwhOrigins extends SwhKnown {
   protected async directOrigin(root: string): Promise<OriginInfo | null> {
     const remote = await this.remoteUrl(root);
     if (!remote) return null;
-    const entry = this.originMemo.get(remote);
-    if (entry && fresh(entry.time, MEMO_TTL)) return entry.value;
-    const epoch = this.memoEpoch;
+    const remembered = this.originMemo.get(remote);
+    if (remembered !== undefined) return remembered;
+    const asOf = this.originMemo.generation;
     const info = await this.findOrigin(originCandidates(remote));
-    // forgotten meanwhile: the answer may be from before the change
-    return epoch === this.memoEpoch ? memoPut(this.originMemo, remote, info) : info;
+    // not remembered if the memo forgot meanwhile: it may be out of date
+    this.originMemo.put(remote, info, asOf);
+    return info;
   }
 
   /**
@@ -212,13 +216,10 @@ export class SwhOrigins extends SwhKnown {
    * @param origin - The origin about to be saved.
    */
   private forgetBeforeSave(origin: string) {
-    this.memoEpoch++;
     const candidates = originCandidates(origin);
-    for (const [remote, entry] of this.originMemo) {
-      if (entry.value && candidates.includes(entry.value.origin)) this.originMemo.delete(remote);
-    }
+    this.originMemo.forget((info) => candidates.includes(info.origin));
     // a SWHID tells not which origin holds it: forget every "not archived"
-    forgetNegatives(this.knownMemo);
+    this.knownMemo.forget((known) => !known);
   }
 
   /**

@@ -1,5 +1,5 @@
 /**
- * Small pure helpers on paths and dates.
+ * Small helpers on paths, dates, time and arrays.
  *
  * @remarks
  * This module must not import `vscode`.
@@ -8,6 +8,39 @@
  */
 
 import type { Maybe } from './types';
+
+/**
+ * The current time.
+ *
+ * @returns The number of seconds since the epoch.
+ */
+export const now = () => Date.now() / 1000;
+
+/**
+ * The distinct elements of an array, in their first order.
+ *
+ * @param xs - The array.
+ * @returns A new array without duplicates.
+ */
+export const uniq = <T>(xs: readonly T[]) => [...new Set(xs)];
+
+/**
+ * Splits an array into consecutive batches.
+ *
+ * @param xs - The array.
+ * @param size - The size of each batch; the last one may be shorter.
+ * @returns The batches, in order.
+ *
+ * @example
+ * ```ts
+ * partition([1, 2, 3, 4, 5], 2); // [[1, 2], [3, 4], [5]]
+ * ```
+ */
+export function partition<T>(xs: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let start = 0; start < xs.length; start += size) out.push(xs.slice(start, start + size));
+  return out;
+}
 
 /**
  * Lists the directories above a path relative to the repository root.
