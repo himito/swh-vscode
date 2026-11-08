@@ -10,6 +10,7 @@
 
 import { hexify } from './encoding';
 import { UserError } from './errors';
+import type { Maybe } from './types';
 
 /**
  * Converts a Git remote URL into the origin URL the archive knows it by.
@@ -32,31 +33,86 @@ import { UserError } from './errors';
  * ```
  */
 export function normalizeOrigin(url: string): string {
-  const strip = (candidate: string) => candidate.replace(/\/+$/, '').replace(/\.git$/i, '');
-  let match = /^(https?|ssh|git|git\+ssh|ssh\+git):\/\/(?:[^@/]+@)?([^/:@]+)(:[0-9]+)?(\/.*)$/i.exec(url);
-  if (match) {
-    // ssh:// and git:// become https; their port is not the web one
-    const scheme = match[1].toLowerCase();
-    const convert = scheme !== 'http' && scheme !== 'https';
-    return strip(`${convert ? 'https' : scheme}://${match[2].toLowerCase()}${convert ? '' : match[3] ?? ''}${match[4]}`);
-  }
-  if (!/^[a-z]:[/\\]/i.test(url)) {
-    match = /^(?:[^@/:]+@)?([^@/:]+):([^:]+)$/.exec(url);
-    if (match && !match[2].startsWith('//')) {
-      return strip(`https://${match[1].toLowerCase()}/${match[2].replace(/^\/+/, '')}`);
-    }
-  }
-  return url;
+  return fromSchemeUrl(url) ?? fromScpLikeUrl(url) ?? url;
 }
+
+/**
+ * A remote URL with a scheme Git fetches over: `scheme://[user@]host[:port]/path`.
+ * The user name is left out of the groups.
+ */
+const SCHEME_URL = /^(?<scheme>https?|ssh|git|git\+ssh|ssh\+git):\/\/(?:[^@/]+@)?(?<host>[^/:@]+)(?<port>:[0-9]+)?(?<path>\/.*)$/i;
+
+/** An scp-like remote URL, `[user@]host:path`, as `git@github.com:owner/repo`. */
+const SCP_LIKE_URL = /^(?:[^@/:]+@)?(?<host>[^@/:]+):(?<path>[^:]+)$/;
+
+/** A Windows path, `C:\…` or `C:/…`, which would otherwise read as scp-like with host `C`. */
+const WINDOWS_PATH = /^[a-z]:[/\\]/i;
+
+/** The web schemes: their port is kept, as it is the web server's. */
+const WEB_SCHEMES = new Set(['http', 'https']);
+
+/**
+ * Removes what does not name a repository: trailing slashes, and a `.git` suffix.
+ *
+ * @param url - An origin URL.
+ * @returns `url` without them.
+ */
+const withoutRepoSuffix = (url: string) => url.replace(/\/+$/, '').replace(/\.git$/i, '');
+
+/**
+ * The origin of a remote URL with a scheme.
+ *
+ * @remarks
+ * An `ssh://` or `git://` URL becomes an `https://` one, without its port,
+ * which is not the web server's.
+ *
+ * @param url - A Git remote URL.
+ * @returns The origin, or `undefined` when `url` has no scheme Git fetches over.
+ */
+function fromSchemeUrl(url: string): Maybe<string> {
+  const groups = SCHEME_URL.exec(url)?.groups;
+  if (!groups) return undefined;
+
+  const scheme = groups.scheme.toLowerCase();
+  const host = groups.host.toLowerCase();
+  const origin = WEB_SCHEMES.has(scheme) ? `${scheme}://${host}${groups.port ?? ''}${groups.path}` : `https://${host}${groups.path}`;
+  return withoutRepoSuffix(origin);
+}
+
+/**
+ * The origin of an scp-like remote URL, `[user@]host:path`.
+ *
+ * @param url - A Git remote URL.
+ * @returns The `https://` origin, or `undefined` when `url` is not scp-like:
+ * a Windows path, or a URL with another scheme, such as `file://`.
+ */
+function fromScpLikeUrl(url: string): Maybe<string> {
+  if (WINDOWS_PATH.test(url)) return undefined;
+
+  const groups = SCP_LIKE_URL.exec(url)?.groups;
+  // `host://…`: a scheme Git fetches over or not, but not scp-like
+  if (!groups || groups.path.startsWith('//')) return undefined;
+
+  const path = groups.path.replace(/^\/+/, '');
+  return withoutRepoSuffix(`https://${groups.host.toLowerCase()}/${path}`);
+}
+
+/** The start of a public origin: a web URL, `http://` or `https://`, in any case. */
+const PUBLIC_ORIGIN = /^https?:\/\//i;
 
 /**
  * Tells whether an origin is a public URL that Software Heritage can fetch.
  *
+ * @remarks
+ * A type guard: when it is `true`, TypeScript knows `origin` is a string.
+ *
  * @param origin - An origin URL, as {@link normalizeOrigin} gives it, or nothing.
- * @returns `true` for an `http://` or `https://` URL.
+ * @returns `true` for an `http://` or `https://` URL; `false` for a local
+ * path, another scheme such as `file://`, or no origin.
  */
-export const isPublicOrigin = (origin: string | undefined | null): origin is string =>
-  !!origin && /^https?:\/\//i.test(origin);
+export function isPublicOrigin(origin: Maybe<string>): origin is string {
+  return origin !== undefined && PUBLIC_ORIGIN.test(origin);
+}
 
 /** A host name followed by a path, without a scheme: `github.com/owner/repo`. */
 const SCHEMELESS_URL = /^[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)+\//u;
