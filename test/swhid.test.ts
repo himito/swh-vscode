@@ -243,4 +243,19 @@ test('scan model', () => {
     scanSummary(scan),
     'Files: 3, archived 1 (33%)   Directories: 3, archived 1 (33%), partially 1 (33%)',
   );
+
+  // a submodule is not a file: archived, it makes its directory no more archived
+  const withSubmodule = buildScan([
+    { path: '.', swhid: Swhid.of('dir', sha('0')), dir: true, archived: false },
+    { path: 'lib', swhid: Swhid.of('dir', sha('1')), dir: true, archived: false },
+    { path: 'lib/vendor', swhid: Swhid.of('rev', sha('2')), dir: false, archived: true },
+    { path: 'lib/a.txt', swhid: Swhid.of('cnt', sha('3')), dir: false, archived: false },
+  ]);
+  const lib = withSubmodule.items.find((item) => item.path === 'lib')!;
+  assert.equal(lib.status, 'not-archived');
+  assert.deepEqual(lib.counts, { files: 1, archived: 0 });
+  assert.equal(withSubmodule.items.find((item) => item.path === 'lib/vendor')!.status, 'archived');
+  assert.equal(scanSummary(withSubmodule), 'Files: 1, archived 0 (0%)   Directories: 2, archived 0 (0%), partially 0 (0%)');
+  // a directory without files shares its counts: they cannot be changed
+  assert.ok(Object.isFrozen(buildScan([{ path: '.', swhid: Swhid.of('dir', sha('0')), dir: true, archived: false }]).root.counts));
 });
