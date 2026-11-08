@@ -1,16 +1,16 @@
 # Software Heritage for VS Code
 
-[![Release](https://github.com/himito/swh-vscode/actions/workflows/release.yml/badge.svg)](https://github.com/himito/swh-vscode/actions/workflows/release.yml)
-[![GitHub release](https://img.shields.io/github/v/release/himito/swh-vscode?sort=semver)](https://github.com/himito/swh-vscode/releases)
-[![Visual Studio Marketplace](https://badgen.net/vs-marketplace/v/himito.swh-vscode)](https://marketplace.visualstudio.com/items?itemName=himito.swh-vscode)
+[![Release](https://github.com/himito/vscode-swh/actions/workflows/release.yml/badge.svg)](https://github.com/himito/vscode-swh/actions/workflows/release.yml)
+[![GitHub release](https://img.shields.io/github/v/release/himito/vscode-swh?sort=semver)](https://github.com/himito/vscode-swh/releases)
+[![Visual Studio Marketplace](https://badgen.net/vs-marketplace/v/himito.vscode-swh)](https://marketplace.visualstudio.com/items?itemName=himito.vscode-swh)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
-[![Archived in Software Heritage](https://archive.softwareheritage.org/badge/origin/https://github.com/himito/swh-vscode/)](https://archive.softwareheritage.org/browse/origin/?origin_url=https://github.com/himito/swh-vscode)
+[![Archived in Software Heritage](https://archive.softwareheritage.org/badge/origin/https://github.com/himito/vscode-swh/)](https://archive.softwareheritage.org/browse/origin/?origin_url=https://github.com/himito/vscode-swh)
 
 A [Software Heritage](https://www.softwareheritage.org) (SWH) client for VS Code. Use it to archive your code, cite it with a [SWHID](https://www.swhid.org), and see which of your files are already archived.
 
 This project is inspired by [swh.el](https://github.com/bzg/swh.el), the Software Heritage client for Emacs.
 
-Install it from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=himito.swh-vscode), or in VS Code: open the Extensions view, search for *Software Heritage*, and install it. From a terminal: `code --install-extension himito.swh-vscode`.
+Install it from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=himito.vscode-swh), or in VS Code: open the Extensions view, search for *Software Heritage*, and install it. From a terminal: `code --install-extension himito.vscode-swh`.
 
 ## Contents
 

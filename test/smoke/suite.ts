@@ -22,7 +22,7 @@ import * as vscode from 'vscode';
  * repository, is open.
  */
 export async function run() {
-  const ext = vscode.extensions.all.find((e) => e.packageJSON.name === 'swh-vscode')!;
+  const ext = vscode.extensions.all.find((e) => e.packageJSON.name === 'vscode-swh')!;
   await ext.activate();
   // every command the manifest declares is registered
   const all = await vscode.commands.getCommands(true);

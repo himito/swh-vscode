@@ -33,12 +33,12 @@ jobs:
           fi
 
       - name: Package
-        run: npx --yes @vscode/vsce package --out swh-vscode-${{ github.ref_name }}.vsix
+        run: npx --yes @vscode/vsce package --out vscode-swh-${{ github.ref_name }}.vsix
 
       - name: Create the GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: swh-vscode-${{ github.ref_name }}.vsix
+          files: vscode-swh-${{ github.ref_name }}.vsix
           generate_release_notes: true
 
   publish:

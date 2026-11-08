@@ -1,5 +1,5 @@
 {
-  "name": "swh-vscode",
+  "name": "vscode-swh",
   "displayName": "Software Heritage",
   "description": "Software Heritage client: archive your code, cite it with a SWHID, and see which of your files are already archived.",
   "version": "0.1.0",
@@ -7,12 +7,12 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/himito/swh-vscode.git"
+    "url": "https://github.com/himito/vscode-swh.git"
   },
   "bugs": {
-    "url": "https://github.com/himito/swh-vscode/issues"
+    "url": "https://github.com/himito/vscode-swh/issues"
   },
-  "homepage": "https://github.com/himito/swh-vscode#readme",
+  "homepage": "https://github.com/himito/vscode-swh#readme",
   "engines": {
     "vscode": "^1.90.0"
   },
