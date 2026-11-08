@@ -49,10 +49,10 @@ export function headerNumber(headers: Headers, name: string): Maybe<number> {
 /**
  * Tells whether a request succeeded.
  *
- * @param resp - A response, or nothing when the server could not be reached.
+ * @param resp - A response, or `undefined` when the server could not be reached.
  * @returns `true` when there is a response and its status is 2xx.
  */
-export function is2xx(resp: Resp | null | undefined): boolean {
+export function is2xx(resp: Maybe<Resp>): boolean {
   return !!resp && resp.status >= 200 && resp.status <= 299;
 }
 
@@ -61,7 +61,7 @@ export function is2xx(resp: Resp | null | undefined): boolean {
  *
  * @remarks
  * Never throws: a network failure, a refused connection or a timeout all
- * give `null`. An HTTP error status is a response like any other: it is up
+ * give `undefined`. An HTTP error status is a response like any other: it is up
  * to the caller to check it, e.g. with {@link is2xx}.
  *
  * @param method - The HTTP method, e.g. `GET`.
@@ -69,7 +69,7 @@ export function is2xx(resp: Resp | null | undefined): boolean {
  * @param body - The request body, a JSON string, if any.
  * @param headers - The request headers.
  * @param timeout - The seconds to wait for the whole response, body included.
- * @returns The response, or `null` when `url` cannot be reached within `timeout` seconds.
+ * @returns The response, or `undefined` when `url` cannot be reached within `timeout` seconds.
  * @defaultValue `timeout` is 60 seconds.
  */
 export async function retrieve(
@@ -78,18 +78,21 @@ export async function retrieve(
   body: Maybe<string>,
   headers: Record<string, string>,
   timeout = 60,
-): Promise<Resp | null> {
+): Promise<Maybe<Resp>> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout * 1000);
+
   try {
     const response = await fetch(url, { method, body, headers, signal: ctrl.signal });
     const text = await response.text();
+
     let parsed: unknown = NOT_JSON;
     try {
       parsed = JSON.parse(text);
     } catch {
       // not JSON
     }
+
     return {
       status: response.status,
       body: parsed,
@@ -97,7 +100,7 @@ export async function retrieve(
       headers: response.headers,
     };
   } catch {
-    return null;
+    return undefined;
   } finally {
     clearTimeout(timer);
   }
