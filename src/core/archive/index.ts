@@ -28,7 +28,7 @@
  */
 
 export { HttpArchiveApi, type HttpArchiveDeps, KNOWN_BATCH_SIZE } from './adapters/httpArchiveApi';
-export { type ArchiveApi, type CitationTarget, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from './archiveApi';
+export { type ArchiveApi, type CitationTarget, type KnownAnswers, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from './archiveApi';
 export { VISITS_SHOWN } from './origins';
 export type { CitationAnswer, FileStatus, OriginInfo, OriginVisits, SaveRequest, SwhDeps, SwhidInfo, Token, TreeNode, Visit } from './types';
 export { Swh } from './swh';

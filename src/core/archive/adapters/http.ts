@@ -21,6 +21,9 @@ import type { Maybe } from '#core/shared';
  */
 export const NOT_JSON = Symbol('not-json');
 
+/** The headers of an HTTP request, by name, e.g. `{ Accept: 'application/json' }`. */
+export type RequestHeaders = Readonly<Record<string, string>>;
+
 /** An HTTP response, as {@link retrieve} gives it. */
 export type Resp = {
   /** The HTTP status code. */
@@ -77,7 +80,7 @@ export async function retrieve(
   method: string,
   url: string,
   body: Maybe<string>,
-  headers: Record<string, string>,
+  headers: RequestHeaders,
   timeout = 60,
 ): Promise<Maybe<Resp>> {
   const ctrl = new AbortController();

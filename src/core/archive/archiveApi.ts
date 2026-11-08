@@ -41,6 +41,16 @@ export type LatestVisit =
     visit: Maybe<Visit>;
   };
 
+/**
+ * Which SWHIDs the archive holds: each SWHID it answered about, as its
+ * canonical text (see `Swhid.toString`), and whether it holds it.
+ *
+ * @remarks
+ * A SWHID the archive did not answer about is missing: that is not knowing,
+ * not a "no".
+ */
+export type KnownAnswers = ReadonlyMap<string, boolean>;
+
 /** What a citation is asked for: a SWHID, or an origin's latest snapshot. */
 export type CitationTarget =
   | {
@@ -81,7 +91,7 @@ export interface ArchiveApi {
    * @returns Whether the archive holds each SWHID it answered about, by the
    * same text; a SWHID it did not answer about is missing.
    */
-  known(swhids: readonly string[]): Promise<Map<string, boolean>>;
+  known(swhids: readonly string[]): Promise<KnownAnswers>;
 
   /**
    * The latest visit of an origin that took a snapshot.

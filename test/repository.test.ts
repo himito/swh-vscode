@@ -16,7 +16,7 @@ import { execFileSync } from 'child_process';
 import { promises as fs, realpathSync, mkdtempSync, writeFileSync, mkdirSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Git, HttpArchiveApi, LineRange, Swh, Swhid } from '#core';
+import { Git, HttpArchiveApi, KNOWN_BATCH_SIZE, LineRange, Swh, Swhid } from '#core';
 
 /** The temporary Git repository the tests run on, created before them. */
 let dir: string;
@@ -37,6 +37,8 @@ let origins = new Set<string>();
 let asked: string[][] = [];
 /** Every request the fake archive received, as `METHOD URL`. */
 let requests: string[] = [];
+/** How the fake archive answers a citation request: its status and body. */
+let citationReply: [number, unknown] = [404, {}];
 /** The real `fetch`, put back after the tests. */
 const realFetch = globalThis.fetch;
 
@@ -87,6 +89,7 @@ before(() => {
     }
     m = /^\/origin\/save\/git\/url\/(.*)\/$/.exec(p);
     if (m) return json(200, { save_request_status: 'accepted' });
+    if (p.startsWith('/raw-intrinsic-metadata/citation/')) return json(...citationReply);
     return json(404, {});
   }) as typeof fetch;
 });
@@ -121,6 +124,7 @@ const reset = (a: string[] = [], o: string[] = []) => {
   origins = new Set(o);
   asked = [];
   requests = [];
+  citationReply = [404, {}];
 };
 
 // Repository root, content and directory SWHIDs as Git computes them, and the
@@ -240,6 +244,51 @@ test('status, unreachable archive, save', async () => {
   } finally {
     globalThis.fetch = failing;
   }
+});
+
+// The archive is asked about at most KNOWN_BATCH_SIZE SWHIDs per request, and
+// the answers of all the batches come back together; no SWHID, no request.
+test('known SWHIDs are asked in batches', async () => {
+  const swhids = Array.from({ length: KNOWN_BATCH_SIZE + 1 }, (_, n) => 'swh:1:cnt:' + n.toString(16).padStart(40, '0'));
+  reset([swhids[0], swhids[KNOWN_BATCH_SIZE]]);
+  const archive = new HttpArchiveApi({ archiveUrl: () => 'https://archive.example.org', token: async () => undefined });
+  const answers = await archive.known(swhids);
+  assert.deepEqual(asked.map((batch) => batch.length), [KNOWN_BATCH_SIZE, 1]);
+  assert.deepEqual(asked.flat(), swhids);
+  assert.equal(answers.size, swhids.length);
+  assert.deepEqual([...answers].filter(([, known]) => known).map(([swhid]) => swhid), [swhids[0], swhids[KNOWN_BATCH_SIZE]]);
+
+  reset();
+  assert.equal((await archive.known([])).size, 0);
+  assert.equal(asked.length, 0);
+});
+
+// A citation is asked for by SWHID or by origin, in BibTeX; the archive's
+// entry is given as it is, a 400 or 404 means it has no metadata to cite,
+// and anything else, an answer without an entry included, that it failed.
+test('citations: the request, and the answer', async () => {
+  reset();
+  const archive = new HttpArchiveApi({ archiveUrl: () => 'https://archive.example.org', token: async () => undefined });
+  const lastRequest = () => new URL(requests[requests.length - 1].split(' ')[1]);
+  const swhid = 'swh:1:cnt:' + '0'.repeat(40) + ';origin=https://example.org/a%20b';
+
+  citationReply = [200, { content: '@software{x}' }];
+  assert.deepEqual(await archive.citation({ swhid }), { entry: '@software{x}' });
+  assert.equal(lastRequest().pathname, '/api/1/raw-intrinsic-metadata/citation/swhid/');
+  assert.equal(lastRequest().searchParams.get('citation_format'), 'bibtex');
+  assert.equal(lastRequest().searchParams.get('target_swhid'), swhid);
+
+  citationReply = [404, { reason: 'no metadata' }];
+  assert.equal(await archive.citation({ origin: 'https://example.org/me/repo' }), 'no-metadata');
+  assert.equal(lastRequest().pathname, '/api/1/raw-intrinsic-metadata/citation/origin/');
+  assert.equal(lastRequest().searchParams.get('origin_url'), 'https://example.org/me/repo');
+
+  citationReply = [400, {}];
+  assert.equal(await archive.citation({ swhid }), 'no-metadata');
+  citationReply = [500, {}];
+  assert.equal(await archive.citation({ swhid }), 'failed');
+  citationReply = [200, { other: 'no entry' }];
+  assert.equal(await archive.citation({ swhid }), 'failed');
 });
 
 // The tokenless rate limit is shown only while it applies: not once a token

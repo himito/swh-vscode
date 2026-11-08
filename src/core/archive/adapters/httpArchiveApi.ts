@@ -12,14 +12,38 @@
  */
 
 import { baseUrl, type Maybe, now, partition, queryString, UserError } from '#core/shared';
-import { headerNumber, is2xx, NOT_JSON, type Resp, retrieve } from './http';
+import { headerNumber, is2xx, NOT_JSON, type RequestHeaders, type Resp, retrieve } from './http';
 import { pathOrigin } from '#core/origin';
-import { type ArchiveApi, type CitationTarget, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from '../archiveApi';
+import { type ArchiveApi, type CitationTarget, type KnownAnswers, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from '../archiveApi';
 import type { CitationAnswer, SaveRequest, Token, Visit } from '../types';
 import { toCitationEntry, toKnown, toSaveRequest, toVisit, toVisits } from './json';
 
 /** The most SWHIDs one `/known/` request may ask about, as the archive allows. */
 export const KNOWN_BATCH_SIZE = 1000;
+
+/** The Web API path of the citations; the kind of what is cited follows it. */
+const CITATION_PATH = '/raw-intrinsic-metadata/citation';
+
+/** The format of the citations asked for. */
+const CITATION_FORMAT = 'bibtex';
+
+/** What a citation is asked for: a SWHID, or an origin; it names the archive's endpoint. */
+type CitationKind = 'swhid' | 'origin';
+
+/** The query parameter that gives what to cite, for each kind of citation. */
+const CITATION_PARAMETERS = {
+  swhid: 'target_swhid',
+  origin: 'origin_url',
+} as const satisfies Record<CitationKind, string>;
+
+/**
+ * The HTTP statuses with which the archive says it has no metadata to cite
+ * what was asked for, rather than failing to make an entry.
+ */
+const NO_METADATA_STATUSES: ReadonlySet<number> = new Set([400, 404]);
+
+/** The media type of JSON, which the Web API answers in and is sent. */
+const JSON_MEDIA_TYPE = 'application/json';
 
 /** The seconds to wait for an answer of the archive. */
 const TIMEOUT = 60;
@@ -67,19 +91,32 @@ export class HttpArchiveApi implements ArchiveApi {
    * Which SWHIDs the archive holds, from its `/known/` endpoint.
    *
    * @remarks
-   * Asks {@link KNOWN_BATCH_SIZE} SWHIDs per request.
+   * Asks at most {@link KNOWN_BATCH_SIZE} SWHIDs per request, one request
+   * after the other: at once, they would spend the rate limit as fast.
+   * Nothing is asked for no SWHIDs.
    *
    * @param swhids - Core SWHIDs.
    * @returns Whether the archive holds each SWHID it answered about.
    * @throws {@link UserError} as {@link ArchiveApi} says.
    */
-  async known(swhids: readonly string[]): Promise<Map<string, boolean>> {
+  async known(swhids: readonly string[]): Promise<KnownAnswers> {
     const answers = new Map<string, boolean>();
-    for (const batch of partition([...swhids], KNOWN_BATCH_SIZE)) {
-      const body = this.body(await this.request('POST', '/known/', JSON.stringify(batch)), 'the SWHID lookup');
-      for (const [swhid, known] of toKnown(body)) answers.set(swhid, known);
+    for (const batch of partition(swhids, KNOWN_BATCH_SIZE)) {
+      for (const [swhid, known] of await this.knownBatch(batch)) answers.set(swhid, known);
     }
     return answers;
+  }
+
+  /**
+   * Which SWHIDs of one batch the archive holds: one `/known/` request.
+   *
+   * @param batch - At most {@link KNOWN_BATCH_SIZE} core SWHIDs.
+   * @returns Whether the archive holds each SWHID it answered about.
+   * @throws {@link UserError} as {@link ArchiveApi} says.
+   */
+  private async knownBatch(batch: readonly string[]): Promise<KnownAnswers> {
+    const resp = await this.request('POST', '/known/', JSON.stringify(batch));
+    return toKnown(this.body(resp, 'the SWHID lookup'));
   }
 
   /**
@@ -92,6 +129,7 @@ export class HttpArchiveApi implements ArchiveApi {
   async latestVisit(origin: string): Promise<LatestVisit> {
     const resp = await this.request('GET', `/origin/${pathOrigin(origin)}/visit/latest/?require_snapshot=true`);
     if (resp.status === 404) return { archived: false };
+
     return { archived: true, visit: toVisit(this.body(resp, "the origin's visits")) };
   }
 
@@ -130,16 +168,10 @@ export class HttpArchiveApi implements ArchiveApi {
    * limit is reached.
    */
   async citation(target: CitationTarget): Promise<CitationAnswer> {
-    const [kind, param, value] = 'swhid' in target ? ['swhid', 'target_swhid', target.swhid] : ['origin', 'origin_url', target.origin];
-    const query = queryString([
-      ['citation_format', 'bibtex'],
-      [param, value],
-    ]);
-    const resp = await this.request('GET', `/raw-intrinsic-metadata/citation/${kind}/?${query}`);
+    const resp = await this.request('GET', HttpArchiveApi.citationPath(target));
     const entry = is2xx(resp) ? toCitationEntry(resp.body) : undefined;
     if (entry !== undefined) return { entry };
-    if (resp.status === 400 || resp.status === 404) return 'no-metadata';
-    return 'failed';
+    return NO_METADATA_STATUSES.has(resp.status) ? 'no-metadata' : 'failed';
   }
 
   /**
@@ -157,6 +189,32 @@ export class HttpArchiveApi implements ArchiveApi {
   // ---------------------------------------------------------------- HTTP
 
   /**
+   * The API path that asks for a BibTeX entry citing a SWHID or an origin.
+   *
+   * @param target - What to cite.
+   * @returns E.g. `/raw-intrinsic-metadata/citation/swhid/?citation_format=bibtex&target_swhid=…`.
+   */
+  private static citationPath(target: CitationTarget): string {
+    const { kind, value } = HttpArchiveApi.citationSubject(target);
+    const query = queryString([
+      ['citation_format', CITATION_FORMAT],
+      [CITATION_PARAMETERS[kind], value],
+    ]);
+    return `${CITATION_PATH}/${kind}/?${query}`;
+  }
+
+  /**
+   * What a citation is asked for, and of which kind.
+   *
+   * @param target - What to cite.
+   * @returns Its kind, which names the archive's endpoint, and the SWHID or URL to cite.
+   */
+  private static citationSubject(target: CitationTarget): { kind: CitationKind; value: string } {
+    if ('swhid' in target) return { kind: 'swhid', value: target.swhid };
+    return { kind: 'origin', value: target.origin };
+  }
+
+  /**
    * The URL of a path of the archive's Web API.
    *
    * @param apiPath - The path, starting with `/`, e.g. `/known/`.
@@ -170,17 +228,19 @@ export class HttpArchiveApi implements ArchiveApi {
    * The headers of a request to the archive.
    *
    * @remarks
-   * The token, when there is one, goes as a bearer token.
+   * The answer is asked for as JSON. The token, when there is one, goes as a
+   * bearer token.
    *
    * @param body - The JSON body, if any: it adds a `Content-Type` header.
    * @returns The headers.
    */
-  private async headers(body?: string): Promise<Record<string, string>> {
+  private async headers(body?: string): Promise<RequestHeaders> {
     const token = await this.deps.token();
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (body) headers['Content-Type'] = 'application/json';
-    if (token) headers.Authorization = `Bearer ${token}`;
-    return headers;
+    return {
+      Accept: JSON_MEDIA_TYPE,
+      ...(body && { 'Content-Type': JSON_MEDIA_TYPE }),
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
   }
 
   /**

@@ -12,7 +12,7 @@
 
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { type ArchiveApi, type CitationTarget, Git, type LatestVisit, type SaveRequest, Swh, Swhid, UserError, type Visit } from '#core';
+import { type ArchiveApi, type CitationTarget, Git, type KnownAnswers, type LatestVisit, type SaveRequest, Swh, Swhid, UserError, type Visit } from '#core';
 
 /** A fake archive in memory, which records what it is asked. */
 class FakeArchive implements ArchiveApi {
@@ -36,7 +36,7 @@ class FakeArchive implements ArchiveApi {
     private visited = new Map<string, Visit>(),
   ) { }
 
-  async known(swhids: readonly string[]): Promise<Map<string, boolean>> {
+  async known(swhids: readonly string[]): Promise<KnownAnswers> {
     this.knownCalls.push([...swhids]);
     this.duringKnown?.();
     return new Map(swhids.map((s) => [s, this.held.has(s)]));

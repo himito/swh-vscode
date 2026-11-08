@@ -13,6 +13,7 @@
  */
 
 import { type Maybe, UserError } from '#core/shared';
+import type { KnownAnswers } from '../archiveApi';
 import type { SaveRequest, Visit } from '../types';
 
 /** A SHA-1 in hexadecimal, as snapshot identifiers are. */
@@ -49,7 +50,7 @@ export type ApiKnown = Record<string, { known?: unknown } | null | undefined>;
  * `known: true` counts as not held.
  * @throws {@link UserError} when the answer is not an object.
  */
-export function toKnown(raw: unknown): Map<string, boolean> {
+export function toKnown(raw: unknown): KnownAnswers {
   if (!isRecord(raw)) throw unexpected('the SWHID lookup');
   const answers = raw as ApiKnown;
   return new Map(Object.entries(answers).map(([swhid, answer]) => [swhid, answer?.known === true]));
@@ -71,8 +72,10 @@ export type ApiVisit = {
  */
 export function toVisit(raw: unknown): Maybe<Visit> {
   if (!isRecord(raw)) return undefined;
+
   const { date, status, snapshot } = raw as ApiVisit;
   if (typeof date !== 'string' || typeof status !== 'string') return undefined;
+
   return typeof snapshot === 'string' && SHA1.test(snapshot) ? { date, status, snapshot } : { date, status };
 }
 
