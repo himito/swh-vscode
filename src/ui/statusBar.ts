@@ -43,6 +43,18 @@ const ITEM_PRIORITY = 100;
 /** The command a click on the item runs, as `package.json` declares it: it copies the SWHID. */
 const CLICK_COMMAND = 'swh.statusBarCopy';
 
+/** The setting that shows or hides the item, under `swh.`. */
+const ENABLED_SETTING = 'statusBar.enabled';
+
+/**
+ * Whether the user wants the item shown.
+ *
+ * @returns The `swh.statusBar.enabled` setting, `true` by default.
+ */
+function isEnabled(): boolean {
+  return config().get<boolean>(ENABLED_SETTING, true);
+}
+
 /**
  * Whether a document is the one in the active editor.
  *
@@ -82,11 +94,31 @@ export type Shown = {
   dir: boolean;
 };
 
-/** What the status bar would show the status of, see `StatusBar.modePath`. */
+/** What the status bar would show the status of, see `StatusBar.target`. */
 type ShownCandidate = Shown & {
   /** Whether its editor has unsaved changes. */
   dirty: boolean;
 };
+
+/** A path inside a `.git` directory, which has no archival status. */
+const GIT_DIR_PATH = /[/\\]\.git([/\\]|$)/;
+
+/**
+ * The file in the active editor, or without an active editor the workspace folder.
+ *
+ * @returns The real path, whether it is a directory, and whether its editor
+ * has unsaved changes; undefined when the active editor shows something other
+ * than a file on disk (an output panel, an untitled document).
+ * @throws When the path cannot be resolved, e.g. the file was deleted.
+ */
+async function activeCandidate(): Promise<Maybe<ShownCandidate>> {
+  const editor = fileEditor();
+  if (editor) {
+    return { path: await fs.realpath(editor.document.uri.fsPath), dir: false, dirty: editor.document.isDirty };
+  }
+  if (vscode.window.activeTextEditor) return undefined;
+  return { path: await realCurrentDir(), dir: true, dirty: false };
+}
 
 /** What the status bar knows about one path. */
 type Entry = {
@@ -208,27 +240,11 @@ export class StatusBar implements vscode.Disposable {
    * @returns The real path, whether it is a directory, and whether its editor
    * has unsaved changes; undefined when there is nothing to show.
    */
-  private async modePath(): Promise<Maybe<ShownCandidate>> {
-    const editor = fileEditor();
-    let targetPath: string;
-    let dir = false;
-    let dirty = false;
-    try {
-      if (editor) {
-        targetPath = await fs.realpath(editor.document.uri.fsPath);
-        dirty = editor.document.isDirty;
-      } else if (!vscode.window.activeTextEditor) {
-        targetPath = await realCurrentDir();
-        dir = true;
-      } else {
-        return undefined;
-      }
-    } catch {
-      return undefined;
-    }
-    if (/[/\\]\.git([/\\]|$)/.test(targetPath)) return undefined;
-    if (!(await this.swh.git.root(targetPath))) return undefined;
-    return { path: targetPath, dir, dirty };
+  private async target(): Promise<Maybe<ShownCandidate>> {
+    const candidate = await activeCandidate().catch(() => undefined);
+    if (!candidate || GIT_DIR_PATH.test(candidate.path)) return undefined;
+    const inRepository = !!(await this.swh.git.root(candidate.path));
+    return inRepository ? candidate : undefined;
   }
 
   /**
@@ -245,27 +261,21 @@ export class StatusBar implements vscode.Disposable {
    */
   async update(force = false): Promise<void> {
     const update = ++this.updates;
-    if (!config().get<boolean>('statusBar.enabled', true)) {
-      this.current = undefined;
-      this.item.hide();
-      return;
-    }
-    const target = await this.modePath();
-    if (update !== this.updates) return;
+    // update() may be called again (e.g. the user switches files) while this
+    // call is still waiting. Each call gets a number; superseded() tells, after
+    // each await, whether a newer call has started since. If so, this call
+    // stops, so that it cannot overwrite the newer call's result with stale data.
+    const superseded = () => update !== this.updates;
+
+    const target = isEnabled() ? await this.target() : undefined;
+    if (superseded()) return;
     this.current = target;
-    if (!target) {
-      this.item.hide();
-      return;
-    }
-    const entry = this.entries.get(target.path);
-    if (target.dirty) {
-      this.render();
-      return;
-    }
-    const stamp = await stampOf(target.path);
-    if (update !== this.updates) return;
-    if (force || !entry || entry.stamp !== stamp) {
-      void this.check(target.path, target.dir, stamp);
+
+    if (target && !target.dirty) {
+      const stamp = await stampOf(target.path);
+      if (superseded()) return;
+      const changed = this.entries.get(target.path)?.stamp !== stamp;
+      if (force || changed) void this.check(target.path, target.dir, stamp);
     }
     this.render();
   }
