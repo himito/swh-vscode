@@ -174,7 +174,7 @@ export class SwhidCommands {
    */
   private async bibtexText(swhidInfo: SwhidInfo, targetPath: string): Promise<LabeledText> {
     const repoRoot = await this.ctx.swh.git.root(targetPath);
-    const [entry, why] = await bibtex(this.ctx.swh, swhidInfo, repoRoot);
+    const { entry, why } = await bibtex(this.ctx.swh, swhidInfo, repoRoot);
     return { text: entry, label: citationWhat(why) };
   }
 

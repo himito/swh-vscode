@@ -209,16 +209,19 @@ test('findSwhids', () => {
 test('citation', () => {
   const cnt = Swhid.of('cnt', '94a9ed024d3859793618152ea559a168bbcbb5e2');
   const swhid = cnt.qualify({ origin: 'https://example.org/me/repo' });
-  assert.deepEqual(citation('no-metadata', swhid, 'repo', 'https://example.org/me/repo'), [
-    '@codefragment{swh-cnt-94a9ed0,\n    title = {repo},\n    url = {https://example.org/me/repo},\n    swhid = {' + swhid + '}\n}\n',
-    'no-metadata',
-  ]);
+  assert.deepEqual(citation('no-metadata', swhid, { title: 'repo', url: 'https://example.org/me/repo' }), {
+    entry: '@codefragment{swh-cnt-94a9ed0,\n    title = {repo},\n    url = {https://example.org/me/repo},\n    swhid = {' + swhid + '}\n}\n',
+    why: 'no-metadata',
+  });
   const snp = Swhid.of('snp', sha('0'));
-  const [entry] = citation('failed', snp, 'repo', undefined, '2026-07-01T10:00:00Z');
+  const { entry } = citation('failed', snp, { title: 'repo', date: '2026-07-01T10:00:00Z' });
   assert.equal(entry, `@software{swh-snp-0000000,\n    title = {repo},\n    date = {2026-07-01},\n    year = {2026},\n    swhid = {${snp}}\n}\n`);
-  assert.equal(citation('failed', cnt.qualify({ lines: LineRange.of(2, 3) }))[0].split(',')[0], '@codefragment{swh-cnt-94a9ed0-L2-L3');
-  assert.equal(citation('failed', Swhid.of('dir', sha('9')))[0].split('{')[0], '@softwareversion');
-  assert.deepEqual(citation({ entry: '@x{}' }, cnt), ['@x{}', 'archive']);
+  assert.equal(citation('failed', cnt.qualify({ lines: LineRange.of(2, 3) })).entry.split(',')[0], '@codefragment{swh-cnt-94a9ed0-L2-L3');
+  assert.equal(citation('failed', Swhid.of('dir', sha('9'))).entry.split('{')[0], '@softwareversion');
+  assert.deepEqual(citation({ entry: '@x{}' }, cnt), { entry: '@x{}', why: 'archive' });
+  // one line, and a release, a version of the software
+  assert.equal(citation('failed', cnt.qualify({ lines: LineRange.of(5) })).entry.split(',')[0], '@codefragment{swh-cnt-94a9ed0-L5');
+  assert.equal(citation('failed', Swhid.of('rel', sha('9'))).entry.split('{')[0], '@softwareversion');
 });
 
 // The scan tree: path order, parent links, per-directory counts, statuses and summary.

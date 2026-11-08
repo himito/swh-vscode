@@ -71,7 +71,7 @@ export class CitationCommands {
    * archive cannot be reached.
    */
   private async citeOrigin(origin: string): Promise<string> {
-    const [entry, why] = await busy('Software Heritage: making the citation…', () => originBibtex(this.ctx.swh, origin));
+    const { entry, why } = await busy('Software Heritage: making the citation…', () => originBibtex(this.ctx.swh, origin));
     await vscode.env.clipboard.writeText(entry);
     info(`Copied ${citationWhat(why)} for ${origin}`);
     return entry;

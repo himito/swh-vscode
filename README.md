@@ -190,6 +190,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │       └── helpers.ts   Shared helpers: settings, messages, progress, the current file or folder
 └── test/
     ├── swhid.test.ts        Unit tests: SWHIDs, origins, citations, the scan model
+    ├── citation.test.ts     Unit tests: citing files and repositories, on a stub backend
     ├── json.test.ts         Unit tests: the archive's JSON answers, mapped
     ├── fakeArchive.test.ts  Unit tests: the backend on a fake ArchiveApi, without HTTP
     ├── backend.test.ts      Unit tests: the backend on a temporary repository, fetch mocked
