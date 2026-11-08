@@ -46,6 +46,9 @@ const CLICK_COMMAND = 'swh.statusBarCopy';
 /** The setting that shows or hides the item, under `swh.`. */
 const ENABLED_SETTING = 'statusBar.enabled';
 
+/** The setting that overrides the item's text by status, under `swh.`. */
+const LIGHTERS_SETTING = 'statusBar.lighters';
+
 /**
  * Whether the user wants the item shown.
  *
@@ -428,25 +431,64 @@ export class StatusBar implements vscode.Disposable {
    * the API requests used this hour when there is no token. The tooltip
    * tells the status in words, the SWHID, and what a click does.
    */
-  render() {
-    const entry = this.current && this.entries.get(this.current.path);
-    if (!this.current || !entry) {
+  render(): void {
+    const shown = this.current;
+    const entry = shown && this.entries.get(shown.path);
+    if (!shown || !entry) {
       this.item.hide();
       return;
     }
-    const lighters = { ...DEFAULT_LIGHTERS, ...config().get<Record<string, string>>('statusBar.lighters', {}) };
     const used = this.swh.rateLimitText();
-    const dirty = !this.current.dir && fileEditor()?.document.isDirty;
-    this.item.text = lighters[entry.status] + (used ? ` ${used}` : '');
-    const tip = new vscode.MarkdownString();
-    tip.appendText((dirty ? 'Modified: the status is that of the file on disk\n\n' : '') + DESCRIPTIONS[entry.status]);
-    if (entry.error) tip.appendText(`: ${entry.error}`);
-    tip.appendText('\n\n' + (entry.swhid ?? 'Software Heritage'));
-    if (used) tip.appendText(`\n\n${used} API requests this hour, no token`);
-    tip.appendText(`\n\nClick: copy the SWHID of the ${this.current.dir ? 'folder' : 'file'}`);
-    this.item.tooltip = tip;
+    const dirty = !shown.dir && !!fileEditor()?.document.isDirty;
+    this.item.text = itemText(entry.status, used);
+    this.item.tooltip = new vscode.MarkdownString().appendText(tooltipText(shown, entry, dirty, used));
     this.item.show();
   }
+}
+
+/**
+ * The item's text: the lighter of a status, then the API requests used.
+ *
+ * @param status - The status shown.
+ * @param used - The API requests used this hour, when there is no token.
+ * @returns The lighter from the `swh.statusBar.lighters` setting, or its
+ * default, followed by `used` if any.
+ */
+function itemText(status: Status, used: Maybe<string>): string {
+  const text = lighter(status);
+  return used ? `${text} ${used}` : text;
+}
+
+/**
+ * The text of a status in the item.
+ *
+ * @param status - The status.
+ * @returns The `swh.statusBar.lighters` setting's text for it, or the default one.
+ */
+function lighter(status: Status): string {
+  const custom = config().get<Partial<Record<Status, string>>>(LIGHTERS_SETTING, {});
+  return custom[status] ?? DEFAULT_LIGHTERS[status];
+}
+
+/**
+ * The item's tooltip, as plain text in paragraphs.
+ *
+ * @param shown - The file or directory shown.
+ * @param entry - What is known about it.
+ * @param dirty - Whether its editor has unsaved changes.
+ * @param used - The API requests used this hour, when there is no token.
+ * @returns The status in words and why the check failed, if it did; the
+ * SWHID; the API requests used; and what a click does.
+ */
+function tooltipText(shown: Shown, entry: Entry, dirty: boolean, used: Maybe<string>): string {
+  const paragraphs = [
+    dirty && 'Modified: the status is that of the file on disk',
+    DESCRIPTIONS[entry.status] + (entry.error ? `: ${entry.error}` : ''),
+    entry.swhid ?? 'Software Heritage',
+    used && `${used} API requests this hour, no token`,
+    `Click: copy the SWHID of the ${shown.dir ? 'folder' : 'file'}`,
+  ];
+  return paragraphs.filter(Boolean).join('\n\n');
 }
 
 /**
