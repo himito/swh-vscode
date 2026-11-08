@@ -5,7 +5,7 @@
  */
 
 import * as vscode from 'vscode';
-import { browseUrl, type Maybe, Swhid } from '#core';
+import { browseUrl, type Maybe, Swhid, SWHID_PREFIX } from '#core';
 import { archiveUrl, openUrl, withoutContext } from '../helpers';
 import { MENU, type MenuEntry } from '../menu';
 
@@ -105,7 +105,7 @@ export class MiscCommands {
   private async readSwhid(): Promise<Maybe<string>> {
     const input = await vscode.window.showInputBox({
       prompt: 'SWHID to open in the archive',
-      placeHolder: 'swh:1:cnt:…',
+      placeHolder: `${SWHID_PREFIX}cnt:…`,
       ignoreFocusOut: true,
       validateInput: swhidInputError,
     });

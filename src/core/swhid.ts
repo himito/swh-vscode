@@ -19,13 +19,31 @@ import { encodeOrigin, isPublicOrigin } from './origin';
 import type { Maybe } from './types';
 
 /**
- * The object types a core SWHID can name.
+ * The version of the SWHID scheme this module reads and writes: the `1` of
+ * `swh:1:…`.
+ *
+ * @remarks
+ * Every SWHID is made with it, and only SWHIDs of it are recognized. A new
+ * version of the scheme may change more than this number, e.g. the hash
+ * (SHA-1 in version 1, see `HASH`) or the object types (see
+ * {@link OBJECT_TYPES}): check those too when changing it.
+ */
+export const SWHID_VERSION = 1;
+
+/** What every SWHID of {@link SWHID_VERSION} starts with: `swh:1:`. */
+export const SWHID_PREFIX = `swh:${SWHID_VERSION}:`;
+
+/**
+ * The object types a core SWHID can name, in {@link SWHID_VERSION}.
  *
  * @remarks
  * `cnt` a file's content, `dir` a directory, `rev` a commit, `rel` a release,
  * `snp` a snapshot of all the branches of an origin at a visit.
  */
-export type ObjectType = 'cnt' | 'dir' | 'rev' | 'rel' | 'snp';
+export const OBJECT_TYPES = ['cnt', 'dir', 'rev', 'rel', 'snp'] as const;
+
+/** An object type a core SWHID can name, see {@link OBJECT_TYPES}. */
+export type ObjectType = (typeof OBJECT_TYPES)[number];
 
 /**
  * The values of a SWHID's context qualifiers, decoded: what
@@ -44,14 +62,23 @@ export type QualifierValues = {
   lines?: LineRange;
 };
 
-/** A SHA-1 in hexadecimal, as Git writes it. */
-const SHA1 = /^[0-9a-f]{40}$/;
+/** The hash of an object in {@link SWHID_VERSION}, as part of a regular expression: a SHA-1 in hexadecimal, as Git writes it. */
+const HASH = '[0-9a-f]{40}';
+
+/** A hash, alone. */
+const SHA1 = new RegExp(`^${HASH}$`);
+
+/** The object types, as a regular expression's alternatives: `cnt|dir|…`. */
+const TYPES = OBJECT_TYPES.join('|');
 
 /** The text of a SWHID, core or qualified, its qualifiers not checked. */
-const SWHID_SYNTAX = /^swh:1:(cnt|dir|rev|rel|snp):([0-9a-f]{40})(;.*)?$/;
+const SWHID_SYNTAX = new RegExp(`^${SWHID_PREFIX}(${TYPES}):(${HASH})(;.*)?$`);
 
-/** The text of a SWHID within other text; see {@link findSwhids}. */
-const SWHID_IN_TEXT = /swh:1:(?:cnt|dir|rev|rel|snp):[0-9a-f]{40}(?:;[^\s"'`<>()[\]{}]*)?/g;
+/**
+ * The text of a SWHID within other text; see {@link findSwhids}. Its
+ * qualifiers end at a blank, a quote, a backtick or a bracket.
+ */
+const SWHID_IN_TEXT = new RegExp(`${SWHID_PREFIX}(?:${TYPES}):${HASH}(?:;[^\\s"'\`<>()[\\]{}]*)?`, 'g');
 
 /** The object types a `visit` qualifier may name: a snapshot. */
 const VISIT_TYPES: readonly ObjectType[] = ['snp'];
@@ -220,7 +247,7 @@ export class Swhid {
     readonly hash: string,
     readonly qualifiers: Qualifiers = Qualifiers.NONE,
   ) {
-    this.text = `swh:1:${type}:${hash}${qualifiers}`;
+    this.text = `${SWHID_PREFIX}${type}:${hash}${qualifiers}`;
   }
 
   /**

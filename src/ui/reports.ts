@@ -12,7 +12,7 @@
 
 import * as vscode from 'vscode';
 import { config } from './helpers';
-import { findSwhids } from '#core';
+import { findSwhids, SWHID_PREFIX } from '#core';
 
 /** The URI scheme of the report documents. */
 export const REPORT_SCHEME = 'swh-report';
@@ -101,7 +101,7 @@ export class SwhidLinks implements vscode.DocumentLinkProvider {
 
     // a cheap test first: most documents hold no SWHID
     const text = doc.getText();
-    if (!text.includes('swh:1:')) return [];
+    if (!text.includes(SWHID_PREFIX)) return [];
 
     return findSwhids(text).map(([start, swhid]) => {
       const range = new vscode.Range(doc.positionAt(start), doc.positionAt(start + swhid.length));
