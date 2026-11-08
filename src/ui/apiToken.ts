@@ -16,10 +16,19 @@ import type { Maybe, Token } from '#core';
 /** The key of the API token in VS Code's secret storage. */
 const TOKEN_KEY = 'swh.apiToken';
 
-/** Trims a token; a blank one counts as no token. */
+/**
+ * Trims a token; a blank one counts as no token.
+ *
+ * @param raw - The token as given, if any.
+ * @returns The token without surrounding blanks, or `undefined` when it is blank or missing.
+ */
 const normalizeToken = (raw: Token): Token => raw?.trim() || undefined;
 
-/** The token set in the `SWH_API_TOKEN` environment variable; read on each call. */
+/**
+ * The token set in the `SWH_API_TOKEN` environment variable; read on each call.
+ *
+ * @returns The token, or `undefined` when the variable is unset or blank.
+ */
 export const envToken = (): Token => normalizeToken(process.env.SWH_API_TOKEN);
 
 /** The API token: the environment's, else the one in VS Code's secret storage. */
@@ -82,7 +91,11 @@ export class ApiToken implements vscode.Disposable {
     this.listener.dispose();
   }
 
-  /** The stored token, read once and cached. */
+  /**
+   * The stored token, read once and cached.
+   *
+   * @returns The token, or `undefined` when none is stored or the storage cannot be read.
+   */
   private stored(): Promise<Token> {
     return (this.storedLookup ??= this.readStored());
   }
@@ -94,6 +107,8 @@ export class ApiToken implements vscode.Disposable {
    * When the secret storage cannot be read (e.g. no keyring on Linux), the
    * requests are made anonymously, and the failure is not cached: the next
    * call tries again.
+   *
+   * @returns The token, or `undefined` when none is stored or the storage cannot be read.
    */
   private async readStored(): Promise<Token> {
     try {

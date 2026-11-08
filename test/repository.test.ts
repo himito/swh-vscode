@@ -460,6 +460,41 @@ test('when the archive is asked about a file', async () => {
   }
 });
 
+// Why the archive cannot hold a file, each reason in turn: outside a
+// repository there is none to tell; then the remote, the origin, tracking,
+// changes, and the commit that last changed it being pushed.
+test('why a file is not archived', async () => {
+  const s = swh();
+  const repo = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'swh-why-')));
+  const run = (...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  const file = path.join(repo, 'f.txt');
+  try {
+    writeFileSync(file, 'f\n');
+    assert.equal(await s.unarchivedWhy(file), undefined, 'outside a repository');
+
+    run('init', '-q', '-b', 'main');
+    run('config', 'user.email', 't@example.org');
+    run('config', 'user.name', 'T');
+    run('config', 'commit.gpgsign', 'false');
+    assert.equal(await s.unarchivedWhy(file), 'the repository has no remote');
+
+    run('remote', 'add', 'origin', '/srv/git/private');
+    assert.equal(await s.unarchivedWhy(file), 'the origin /srv/git/private is not a public URL');
+
+    run('remote', 'set-url', 'origin', 'git@example.org:me/why.git');
+    assert.equal(await s.unarchivedWhy(file), 'Git does not track it');
+
+    run('add', 'f.txt');
+    run('commit', '-q', '-m', 'f');
+    assert.equal(await s.unarchivedWhy(file), 'the commit holding it is not pushed');
+
+    run('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    assert.equal(await s.unarchivedWhy(file), undefined, 'pushed: nothing prevents it');
+  } finally {
+    await fs.rm(repo, { recursive: true, force: true });
+  }
+});
+
 // A file's content SWHID outside a repository: its bytes as they are on disk,
 // as `git hash-object --no-filters` hashes them; a file Git cannot read is
 // an error the user is told about.

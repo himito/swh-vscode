@@ -15,12 +15,25 @@
 import { type Git, relativePath } from '#core/git';
 import { isPublicOrigin } from '#core/origin';
 import { ancestors, type Maybe, now, UserError } from '#core/shared';
-import { type LineRange, Swhid } from '#core/swhid';
+import { type LineRange, type ObjectType, Swhid } from '#core/swhid';
 import type { ArchiveApi } from './archiveApi';
 import { Holdings } from './holdings';
 import { Origins } from './origins';
 import { WorkingTree } from './workingTree';
 import type { FileStatus, OriginInfo, OriginVisits, SaveRequest, SwhDeps, SwhidInfo, TreeNode } from './types';
+
+/** The exit status of `git diff --quiet` when it finds differences; 0 is none, more a failure. */
+const DIFFERENCES_FOUND = 1;
+
+/** The types of the entries of a Git tree: a file, a directory, or a submodule's commit. */
+type TreeEntryType = 'blob' | 'tree' | 'commit';
+
+/** The object type of the SWHID of each type of tree entry. */
+const OBJECT_TYPE_OF_ENTRY = {
+  blob: 'cnt',
+  tree: 'dir',
+  commit: 'rev',
+} as const satisfies Record<TreeEntryType, ObjectType>;
 
 /**
  * The Software Heritage client: archival status, SWHIDs, visits, save
@@ -86,27 +99,96 @@ export class Swh {
    */
   async tree(root: string): Promise<TreeNode[]> {
     const tree = await this.workingTree.worktreeTree(root);
-    const lsTree = (await this.git.get(root, ['ls-tree', '-r', '-t', '-z', tree])) ?? '';
-    const nodes: TreeNode[] = [{ path: '.', swhid: Swhid.of('dir', tree), dir: true, archived: false }];
-    for (const line of lsTree.split('\0').filter(Boolean)) {
-      // "<mode> <type> <hash>\t<path>", the path may hold tabs
-      const tab = line.indexOf('\t');
-      const [, type, hash] = line.substring(0, tab).split(' ');
-      nodes.push({
-        path: line.substring(tab + 1),
-        swhid: Swhid.of(type === 'tree' ? 'dir' : type === 'blob' ? 'cnt' : 'rev', hash),
-        dir: type === 'tree',
-        archived: false,
-      });
-    }
-    const swhids = new Map(nodes.map((node) => [node.path, node.swhid]));
-    // a directory holds a submodule's commit, not the commit itself
-    const covered = (node: TreeNode) =>
-      node.swhid.type !== 'rev' && ancestors(node.path).some((dir) => this.holdings.isKnownArchived(swhids.get(dir)!));
-    // directories first: an archived one covers everything under it
-    await this.holdings.rememberKnown(nodes.filter((node) => node.dir && !covered(node)).map((node) => node.swhid));
-    await this.holdings.rememberKnown(nodes.filter((node) => !node.dir && !covered(node)).map((node) => node.swhid));
-    return nodes.map((node) => ({ ...node, archived: this.holdings.isKnownArchived(node.swhid) || covered(node) }));
+    const nodes = await this.treeNodes(root, tree);
+    return this.withArchivalStatus(nodes);
+  }
+
+  /**
+   * The files and directories of a tree, not checked against the archive yet.
+   *
+   * @param root - The repository's root directory.
+   * @param tree - The tree's hash.
+   * @returns The nodes, the tree's root `.` first, then in `git ls-tree` order.
+   */
+  private async treeNodes(root: string, tree: string): Promise<TreeNode[]> {
+    const listing = (await this.git.get(root, ['ls-tree', '-r', '-t', '-z', tree])) ?? '';
+    const entries = listing.split('\0').filter(Boolean);
+    const entryNodes = entries.map(Swh.treeEntry);
+
+    const rootSwhid = Swhid.of('dir', tree);
+    const rootNode: TreeNode = { path: '.', swhid: rootSwhid, dir: true, archived: false };
+    return [rootNode, ...entryNodes];
+  }
+
+  /**
+   * Parses one entry of `git ls-tree -z`.
+   *
+   * @param entry - `<mode> <type> <hash>\t<path>`; the path may hold tabs.
+   * @returns The node it names, not checked against the archive yet.
+   */
+  private static treeEntry(entry: string): TreeNode {
+    const tab = entry.indexOf('\t');
+    const [, type, hash] = entry.substring(0, tab).split(' ');
+    const path = entry.substring(tab + 1);
+    const swhid = Swhid.of(OBJECT_TYPE_OF_ENTRY[type as TreeEntryType], hash);
+    return { path, swhid, dir: type === 'tree', archived: false };
+  }
+
+  /**
+   * The nodes of a tree, with whether the archive holds each.
+   *
+   * @remarks
+   * Merkle-pruned: the directories are asked about first, and an archived
+   * one covers everything under it, which is then not asked about.
+   *
+   * @param nodes - The nodes, the root among them.
+   * @returns The same nodes, each with its archival status.
+   * @throws {@link UserError} when the archive fails.
+   */
+  private async withArchivalStatus(nodes: readonly TreeNode[]): Promise<TreeNode[]> {
+    const swhidAt = new Map(nodes.map((node) => [node.path, node.swhid]));
+    const covered = (node: TreeNode) => this.isCovered(node, swhidAt);
+
+    // directories first: the files are then filtered by what they cover
+    await this.askAboutUncovered(nodes.filter((node) => node.dir), covered);
+    await this.askAboutUncovered(nodes.filter((node) => !node.dir), covered);
+
+    return nodes.map((node) => {
+      const archived = this.holdings.isKnownArchived(node.swhid) || covered(node);
+      return { ...node, archived };
+    });
+  }
+
+  /**
+   * Asks the archive about the nodes no archived directory covers.
+   *
+   * @param nodes - The nodes.
+   * @param covered - Tells whether an archived directory covers a node, as
+   * far as the archive's answers so far tell.
+   * @throws {@link UserError} when the archive fails.
+   */
+  private async askAboutUncovered(nodes: readonly TreeNode[], covered: (node: TreeNode) => boolean): Promise<void> {
+    const uncovered = nodes.filter((node) => !covered(node));
+    await this.holdings.rememberKnown(uncovered.map((node) => node.swhid));
+  }
+
+  /**
+   * Whether an archived directory above a node covers it.
+   *
+   * @remarks
+   * A submodule's commit is never covered: a directory holds a reference to
+   * it, not the commit itself.
+   *
+   * @param node - The node.
+   * @param swhidAt - The SWHID of each node of the tree, by path.
+   * @returns `true` when the archive is known to hold a directory above the node.
+   */
+  private isCovered(node: TreeNode, swhidAt: ReadonlyMap<string, Swhid>): boolean {
+    if (node.swhid.type === 'rev') return false;
+    return ancestors(node.path).some((dir) => {
+      const swhid = swhidAt.get(dir);
+      return swhid !== undefined && this.holdings.isKnownArchived(swhid);
+    });
   }
 
   // ---------------------------------------------------------------- refresh
@@ -154,22 +236,80 @@ export class Swh {
   async unarchivedWhy(targetPath: string): Promise<Maybe<string>> {
     const root = await this.git.root(targetPath);
     if (!root) return undefined;
+
     const rel = relativePath(root, targetPath);
+    return (await this.originProblem(root)) ?? (await this.pathProblem(root, rel));
+  }
+
+  /**
+   * Why the archive cannot hold anything of a repository: its origin.
+   *
+   * @param root - The repository's root directory.
+   * @returns The reason in words, or `undefined` when its origin is public.
+   */
+  private async originProblem(root: string): Promise<Maybe<string>> {
     const origin = await this.origins.originOf(root);
     if (!origin) return 'the repository has no remote';
     if (!isPublicOrigin(origin)) return `the origin ${origin} is not a public URL`;
-    if (!(await this.git.get(root, ['--literal-pathspecs', 'ls-files', '--', rel]))) return 'Git does not track it';
-    // 1: differences; any other failure (e.g. no commit yet) is not one
-    if ((await this.git.run(root, ['--literal-pathspecs', 'diff', '--quiet', 'HEAD', '--', rel])).status === 1) {
-      return 'it has uncommitted changes';
-    }
-    // not HEAD: a later commit elsewhere in the tree does not keep this
-    // content from being archived
-    const last = await this.workingTree.lastCommit(root, rel);
-    if (!last || !(await this.git.get(root, ['for-each-ref', '--count=1', '--contains', last, 'refs/remotes/']))) {
-      return 'the commit holding it is not pushed';
-    }
     return undefined;
+  }
+
+  /**
+   * Why the archive cannot hold a path as it is, as Git tells it.
+   *
+   * @remarks
+   * Only the commit that last changed the path must be pushed, not HEAD: a
+   * later commit elsewhere in the tree does not keep this content from being
+   * archived.
+   *
+   * @param root - The repository's root directory.
+   * @param rel - The path relative to the root.
+   * @returns The reason in words, or `undefined` when nothing prevents it.
+   */
+  private async pathProblem(root: string, rel: string): Promise<Maybe<string>> {
+    if (!(await this.isTracked(root, rel))) return 'Git does not track it';
+    if (await this.hasUncommittedChanges(root, rel)) return 'it has uncommitted changes';
+
+    const lastChange = await this.workingTree.lastCommit(root, rel);
+    if (!lastChange || !(await this.isPushed(root, lastChange))) return 'the commit holding it is not pushed';
+    return undefined;
+  }
+
+  /**
+   * Whether Git tracks a path, or files under it.
+   *
+   * @param root - The repository's root directory.
+   * @param rel - The path relative to the root, taken literally.
+   * @returns `true` when `git ls-files` lists anything for it.
+   */
+  private async isTracked(root: string, rel: string): Promise<boolean> {
+    const listed = await this.git.get(root, ['--literal-pathspecs', 'ls-files', '--', rel]);
+    return listed !== undefined;
+  }
+
+  /**
+   * Whether a path differs from HEAD, in the working tree or the index.
+   *
+   * @param root - The repository's root directory.
+   * @param rel - The path relative to the root, taken literally.
+   * @returns `true` when `git diff` finds a difference; `false` too when it
+   * fails, e.g. without a commit yet, which is no change.
+   */
+  private async hasUncommittedChanges(root: string, rel: string): Promise<boolean> {
+    const diff = await this.git.run(root, ['--literal-pathspecs', 'diff', '--quiet', 'HEAD', '--', rel]);
+    return diff.status === DIFFERENCES_FOUND;
+  }
+
+  /**
+   * Whether a commit is pushed: a remote branch holds it.
+   *
+   * @param root - The repository's root directory.
+   * @param commit - The commit's hash.
+   * @returns `true` when a branch of `refs/remotes/` contains it.
+   */
+  private async isPushed(root: string, commit: string): Promise<boolean> {
+    const branch = await this.git.get(root, ['for-each-ref', '--count=1', '--contains', commit, 'refs/remotes/']);
+    return branch !== undefined;
   }
 
   // ---------------------------------------------------------------- what the archive holds
