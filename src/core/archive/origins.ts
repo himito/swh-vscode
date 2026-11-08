@@ -1,6 +1,6 @@
 /**
- * The second layer of {@link Swh}: repositories' origins, their visits, and
- * save requests.
+ * Repositories' origins, their visits, and save requests, as the
+ * {@link Origins} service: one of the parts {@link Swh} is made of.
  *
  * @packageDocumentation
  */
@@ -9,19 +9,46 @@ import { type Maybe, UserError } from '#core/shared';
 import { isPublicOrigin, normalizeOrigin, originCandidates } from '#core/origin';
 import { Swhid } from '#core/swhid';
 import { Memo, MEMO_TTL } from './memo';
-import { SwhKnown } from './known';
+import type { Git } from '#core/git';
+import type { ArchiveApi } from './archiveApi';
+import type { Holdings } from './holdings';
 import type { OriginInfo, OriginVisits, SaveRequest, Visit } from './types';
 
-/** How many of an origin's latest visits {@link Swh.visits} gives. */
+/** How many of an origin's latest visits {@link Origins.visits} gives. */
 export const VISITS_SHOWN = 10;
 
-/** Origins, visits and save requests; see {@link Swh}. */
-export class SwhOrigins extends SwhKnown {
+/**
+ * Origins, visits and save requests: what the archive knows of repositories.
+ *
+ * @remarks
+ * The origins' statuses are remembered for a while; a save request forgets
+ * those it may change, and the "not archived" answers of {@link Holdings}.
+ */
+export class Origins {
   /**
    * Remote URL → the origin's status, trusted for `MEMO_TTL` seconds,
    * archived or not: a visit may come at any time.
    */
-  protected readonly originMemo = new Memo<OriginInfo>({ ttl: MEMO_TTL, keepPositives: false });
+  private readonly memo = new Memo<OriginInfo>({ ttl: MEMO_TTL, keepPositives: false });
+
+  /**
+   * Creates the service, knowing nothing yet.
+   *
+   * @param git - The Git runner, to read the repositories' remotes.
+   * @param archive - The archive to ask, see {@link ArchiveApi}.
+   * @param holdings - What the archive holds: for the upstream commit, and
+   * to forget the "not archived" answers before a save request.
+   */
+  constructor(
+    private readonly git: Git,
+    private readonly archive: ArchiveApi,
+    private readonly holdings: Holdings,
+  ) {}
+
+  /** Forget every origin's status: what the archive holds of them may have changed. */
+  forget(): void {
+    this.memo.clear();
+  }
 
   // ---------------------------------------------------------------- origins
 
@@ -115,15 +142,15 @@ export class SwhOrigins extends SwhKnown {
    * @returns Its status, or `null` without a remote.
    * @throws {@link UserError} when the archive cannot answer.
    */
-  protected async directOrigin(root: string): Promise<OriginInfo | null> {
+  private async directOrigin(root: string): Promise<OriginInfo | null> {
     const remote = await this.remoteUrl(root);
     if (!remote) return null;
-    const remembered = this.originMemo.get(remote);
+    const remembered = this.memo.get(remote);
     if (remembered !== undefined) return remembered;
-    const asOf = this.originMemo.generation;
+    const asOf = this.memo.generation;
     const info = await this.findOrigin(originCandidates(remote));
     // not remembered if the memo forgot meanwhile: it may be out of date
-    this.originMemo.put(remote, info, asOf);
+    this.memo.put(remote, info, asOf);
     return info;
   }
 
@@ -155,7 +182,7 @@ export class SwhOrigins extends SwhKnown {
     const commit = await this.git.get(root, ['rev-parse', '--verify', '-q', '@{upstream}^{commit}']);
     if (!commit) return {};
     const rev = Swhid.of('rev', commit);
-    return { upstream: rev, 'upstream-archived': await this.isArchived(rev) };
+    return { upstream: rev, 'upstream-archived': await this.holdings.isArchived(rev) };
   }
 
   /**
@@ -174,7 +201,7 @@ export class SwhOrigins extends SwhKnown {
   }
 
   /**
-   * Like {@link Swh.origin}, but `null` rather than an error without a
+   * Like {@link Origins.origin}, but `null` rather than an error without a
    * remote; for the status bar's background checks.
    *
    * @param root - The repository's root directory.
@@ -217,9 +244,9 @@ export class SwhOrigins extends SwhKnown {
    */
   private forgetBeforeSave(origin: string) {
     const candidates = originCandidates(origin);
-    this.originMemo.forget((info) => candidates.includes(info.origin));
+    this.memo.forget((info) => candidates.includes(info.origin));
     // a SWHID tells not which origin holds it: forget every "not archived"
-    this.knownMemo.forget((known) => !known);
+    this.holdings.forgetNegatives();
   }
 
   /**
@@ -244,7 +271,7 @@ export class SwhOrigins extends SwhKnown {
    * Ask the archive to save a repository's origin now.
    *
    * @param root - The repository's root directory.
-   * @returns The save request, see {@link Swh.saveOrigin}.
+   * @returns The save request, see {@link Origins.saveOrigin}.
    * @throws {@link UserError} when there is no remote, the origin is not
    * public, or the archive refuses or cannot answer.
    */

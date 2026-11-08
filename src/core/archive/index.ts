@@ -11,9 +11,12 @@
  * `adapters/`) implements the interface over the archive's Web API
  * (`/api/1`).
  *
- * {@link Swh} is built in layers, each file's class extending the one
- * before: `known.ts` (Git, the archive, which SWHIDs it holds) →
- * `origins.ts` → `swhids.ts` → `swh.ts`, {@link Swh} itself.
+ * {@link Swh} is made of parts, each a service of its own, given what it
+ * needs when {@link Swh} builds it: {@link Holdings} (`holdings.ts`, which
+ * SWHIDs the archive holds) ← {@link Origins} (`origins.ts`, origins,
+ * visits, save requests) ← {@link WorkingTree} (`workingTree.ts`, the
+ * SWHIDs of files and directories). Each uses those to its left, and only
+ * through their public methods.
  *
  * Answers that may change are remembered for a while (see `MEMO_TTL`):
  * what the archive holds stays so for the session, what it does not hold
@@ -29,6 +32,8 @@
 
 export { HttpArchiveApi, type HttpArchiveDeps, KNOWN_BATCH_SIZE } from './adapters/httpArchiveApi';
 export { type ArchiveApi, type CitationTarget, type KnownAnswers, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from './archiveApi';
-export { VISITS_SHOWN } from './origins';
+export { Holdings } from './holdings';
+export { Origins, VISITS_SHOWN } from './origins';
+export { WorkingTree } from './workingTree';
 export type { CitationAnswer, FileStatus, OriginInfo, OriginVisits, SaveRequest, SwhDeps, SwhidInfo, Token, TreeNode, Visit } from './types';
 export { Swh } from './swh';
