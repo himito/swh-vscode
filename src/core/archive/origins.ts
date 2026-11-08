@@ -155,7 +155,7 @@ export class SwhOrigins extends SwhKnown {
     const commit = await this.git.get(root, ['rev-parse', '--verify', '-q', '@{upstream}^{commit}']);
     if (!commit) return {};
     const rev = Swhid.of('rev', commit);
-    return { upstream: rev, 'upstream-archived': await this.archivedP(rev) };
+    return { upstream: rev, 'upstream-archived': await this.isArchived(rev) };
   }
 
   /**

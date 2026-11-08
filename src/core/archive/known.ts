@@ -51,7 +51,7 @@ export class SwhKnown {
    * @param swhid - A core SWHID.
    * @returns `true` only when a remembered answer says so.
    */
-  knownP(swhid: Swhid): boolean {
+  isKnownArchived(swhid: Swhid): boolean {
     return this.knownMemo.get(swhid.toString()) === true;
   }
 
@@ -59,7 +59,7 @@ export class SwhKnown {
    * Ask the archive which SWHIDs it holds, for those not remembered yet.
    *
    * @remarks
-   * The answers go to the memo, where {@link Swh.knownP} reads them. Answers
+   * The answers go to the memo, where {@link Swh.isKnownArchived} reads them. Answers
    * that arrive after the memo forgot answers (see {@link Swh.refresh}) are
    * not stored. The archive is asked about the SWHIDs' canonical texts.
    *
@@ -95,8 +95,8 @@ export class SwhKnown {
    * @returns `true` when the archive holds it.
    * @throws {@link UserError} as {@link Swh.rememberKnown} does.
    */
-  async archivedP(swhid: Swhid): Promise<boolean> {
+  async isArchived(swhid: Swhid): Promise<boolean> {
     await this.rememberKnown([swhid]);
-    return this.knownP(swhid);
+    return this.isKnownArchived(swhid);
   }
 }

@@ -411,7 +411,7 @@ export class StatusBar implements vscode.Disposable {
     }
 
     const swhid = await this.swh.contentSwhid(file, root);
-    if (await this.swh.archivedP(swhid)) {
+    if (await this.swh.isArchived(swhid)) {
       report('archived', swhid);
       return;
     }
@@ -456,7 +456,7 @@ export class StatusBar implements vscode.Disposable {
     }
 
     const swhid = Swhid.of('dir', tree);
-    const status = (await this.swh.archivedP(swhid)) ? 'archived' : 'origin-archived';
+    const status = (await this.swh.isArchived(swhid)) ? 'archived' : 'origin-archived';
     report(status, swhid);
   }
 

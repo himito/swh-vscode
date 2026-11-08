@@ -61,11 +61,11 @@ export class Swh extends SwhSwhids {
     const swhids = new Map(nodes.map((node) => [node.path, node.swhid]));
     // a directory holds a submodule's commit, not the commit itself
     const covered = (node: TreeNode) =>
-      node.swhid.type !== 'rev' && ancestors(node.path).some((dir) => this.knownP(swhids.get(dir)!));
+      node.swhid.type !== 'rev' && ancestors(node.path).some((dir) => this.isKnownArchived(swhids.get(dir)!));
     // directories first: an archived one covers everything under it
     await this.rememberKnown(nodes.filter((node) => node.dir && !covered(node)).map((node) => node.swhid));
     await this.rememberKnown(nodes.filter((node) => !node.dir && !covered(node)).map((node) => node.swhid));
-    return nodes.map((node) => ({ ...node, archived: this.knownP(node.swhid) || covered(node) }));
+    return nodes.map((node) => ({ ...node, archived: this.isKnownArchived(node.swhid) || covered(node) }));
   }
 
   // ---------------------------------------------------------------- refresh

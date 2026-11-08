@@ -92,7 +92,7 @@ export class SwhSwhids extends SwhOrigins {
    */
   private async archivedCommits(commits: string[]): Promise<string[]> {
     await this.rememberKnown(commits.map((commit) => Swhid.of('rev', commit)));
-    return commits.filter((commit) => this.knownP(Swhid.of('rev', commit)));
+    return commits.filter((commit) => this.isKnownArchived(Swhid.of('rev', commit)));
   }
 
   /**
@@ -259,7 +259,7 @@ export class SwhSwhids extends SwhOrigins {
     return {
       core: worktreeSwhid,
       anchor: pub && root ? await this.anchor(root, rel!, worktreeSwhid) : undefined,
-      archived: pub || !root ? await this.archivedP(worktreeSwhid) : false,
+      archived: pub || !root ? await this.isArchived(worktreeSwhid) : false,
       version: undefined as Maybe<Swhid>,
     };
   }
@@ -359,7 +359,7 @@ export class SwhSwhids extends SwhOrigins {
    */
   async fileStatus(file: string, coreSwhid?: Swhid): Promise<FileStatus> {
     const swhid = coreSwhid ?? (await this.contentSwhid(file, await this.git.root(file)));
-    return { swhid: swhid, archived: await this.archivedP(swhid) };
+    return { swhid: swhid, archived: await this.isArchived(swhid) };
   }
 
   /**

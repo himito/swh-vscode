@@ -84,11 +84,11 @@ test('known SWHIDs are asked once, and remembered', async () => {
   const s = swhOn(archive);
   await s.rememberKnown([A, B, A]);
   assert.deepEqual(archive.knownCalls, [[a, b]]);
-  assert.equal(s.knownP(A), true);
-  assert.equal(s.knownP(B), false);
+  assert.equal(s.isKnownArchived(A), true);
+  assert.equal(s.isKnownArchived(B), false);
 
   // remembered: not asked again
-  assert.equal(await s.archivedP(A), true);
+  assert.equal(await s.isArchived(A), true);
   assert.equal(archive.knownCalls.length, 1);
 
   // a refresh forgets what is not held, not what is
@@ -102,7 +102,7 @@ test('an answer from before a refresh is not remembered', async () => {
   const s = swhOn(archive);
   archive.duringKnown = () => s.refresh();
   await s.rememberKnown([A]);
-  assert.equal(s.knownP(A), false);
+  assert.equal(s.isKnownArchived(A), false);
 });
 
 test("an origin's status tries its candidates in order", async () => {
