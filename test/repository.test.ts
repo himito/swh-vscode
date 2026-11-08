@@ -19,7 +19,7 @@ import { execFileSync } from 'child_process';
 import { promises as fs, realpathSync, mkdtempSync, writeFileSync, mkdirSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Git, HttpArchiveApi, KNOWN_BATCH_SIZE, LineRange, RATE_LIMIT_MESSAGE, Swh, Swhid, UserError } from '#core';
+import { ANCHOR_CANDIDATES_MAX, Git, HttpArchiveApi, KNOWN_BATCH_SIZE, LineRange, RATE_LIMIT_MESSAGE, Swh, Swhid, UserError } from '#core';
 
 /** The temporary Git repository the tests run on, created before them. */
 let dir: string;
@@ -322,6 +322,116 @@ test('the rate limit, from the headers', async () => {
   citationReply = [200, { content: '@x{}' }, { 'X-RateLimit-Limit': '120' }];
   await archive.citation({ swhid });
   assert.deepEqual(archive.rateLimit(), limit);
+});
+
+// A file last changed long ago, under more commits than are looked at: the
+// commit that last changed it is still a candidate anchor, the surest one.
+test('the anchor of a file changed long ago', async () => {
+  const repo = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'swh-long-')));
+  const run = (...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  try {
+    run('init', '-q', '-b', 'main');
+    run('config', 'user.email', 't@example.org');
+    run('config', 'user.name', 'T');
+    run('config', 'commit.gpgsign', 'false');
+    run('remote', 'add', 'origin', 'git@example.org:me/repo.git');
+    writeFileSync(path.join(repo, 'old.txt'), 'unchanged since\n');
+    run('add', '.');
+    run('commit', '-q', '-m', 'old.txt');
+    const lastChange = run('rev-parse', 'HEAD');
+    // more commits on top than the anchor candidates look at, none touching old.txt
+    let tree = run('rev-parse', 'HEAD^{tree}');
+    let parent = lastChange;
+    for (let n = 0; n <= ANCHOR_CANDIDATES_MAX; n++) {
+      parent = execFileSync('git', ['commit-tree', tree, '-p', parent, '-m', `empty ${n}`], { cwd: repo, encoding: 'utf8' }).trim();
+    }
+    run('update-ref', 'refs/heads/main', parent);
+
+    const blob = run('rev-parse', 'HEAD:old.txt');
+    // the archive holds only the commit that last changed old.txt
+    reset(['swh:1:cnt:' + blob, 'swh:1:rev:' + lastChange], ['https://example.org/me/repo']);
+    const info = await swh().qualifiedSwhid(path.join(repo, 'old.txt'));
+    assert.ok(info.swhid.qualifiers.anchor?.equals(Swhid.of('rev', lastChange)));
+  } finally {
+    await fs.rm(repo, { recursive: true, force: true });
+  }
+});
+
+// The archived version of a path is that of the same kind: when `p` was a
+// file in the archived commit and is a directory now, the archived version of
+// the directory is none, not the old file's content passed off as a directory.
+test('the archived version of a path that changed kind', async () => {
+  const repo = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'swh-kind-')));
+  const run = (...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  try {
+    run('init', '-q', '-b', 'main');
+    run('config', 'user.email', 't@example.org');
+    run('config', 'user.name', 'T');
+    run('config', 'commit.gpgsign', 'false');
+    run('remote', 'add', 'origin', 'git@example.org:me/repo.git');
+    writeFileSync(path.join(repo, 'p'), 'a file\n');
+    run('add', '.');
+    run('commit', '-q', '-m', 'p is a file');
+    const archivedCommit = run('rev-parse', 'HEAD');
+    await fs.rm(path.join(repo, 'p'));
+    mkdirSync(path.join(repo, 'p'));
+    writeFileSync(path.join(repo, 'p', 'inside.txt'), 'in a directory\n');
+    run('add', '-A');
+    run('commit', '-q', '-m', 'p is a directory');
+
+    reset(['swh:1:rev:' + archivedCommit], ['https://example.org/me/repo']);
+    const info = await swh().qualifiedSwhid(path.join(repo, 'p'), undefined, true);
+    assert.equal(info.version, undefined, 'no archived commit holds p as a directory');
+    assert.equal(info.core.type, 'dir');
+    assert.equal(info.core.hash, run('rev-parse', 'HEAD:p'));
+  } finally {
+    await fs.rm(repo, { recursive: true, force: true });
+  }
+});
+
+// Whether the archive is asked about a file: outside a repository, yes, as
+// its content may have been archived from elsewhere; in a repository without
+// a public origin, no, as such a repository cannot be archived.
+test('when the archive is asked about a file', async () => {
+  const loose = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'swh-ask-')));
+  const run = (...args: string[]) => execFileSync('git', args, { cwd: loose, encoding: 'utf8' }).trim();
+  try {
+    const file = path.join(loose, 'loose.txt');
+    writeFileSync(file, 'archived from elsewhere\n');
+    const swhid = 'swh:1:cnt:' + execFileSync('git', ['hash-object', '--no-filters', file], { encoding: 'utf8' }).trim();
+
+    reset([swhid]);
+    const outside = await swh().qualifiedSwhid(file);
+    assert.equal(outside.archived, true);
+    assert.equal(String(outside.swhid), swhid, 'no context outside a repository');
+    assert.deepEqual(asked, [[swhid]]);
+
+    run('init', '-q', '-b', 'main');
+    run('remote', 'add', 'origin', '/srv/git/private');
+    reset([swhid]);
+    const unpublished = await swh().qualifiedSwhid(file);
+    assert.equal(unpublished.archived, false);
+    assert.deepEqual(asked, [], 'not asked without a public origin');
+  } finally {
+    await fs.rm(loose, { recursive: true, force: true });
+  }
+});
+
+// A file's content SWHID outside a repository: its bytes as they are on disk,
+// as `git hash-object --no-filters` hashes them; a file Git cannot read is
+// an error the user is told about.
+test('a content SWHID outside a repository', async () => {
+  const s = swh();
+  const loose = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'swh-loose-')));
+  try {
+    const file = path.join(loose, 'notes.txt');
+    writeFileSync(file, 'line one\r\nline two\r\n');
+    const expected = execFileSync('git', ['hash-object', '--no-filters', file], { encoding: 'utf8' }).trim();
+    assert.equal(String(await s.contentSwhid(file, undefined)), 'swh:1:cnt:' + expected);
+    await assert.rejects(s.contentSwhid(path.join(loose, 'missing.txt'), undefined), /^UserError: Cannot hash .*missing\.txt with git$/);
+  } finally {
+    await fs.rm(loose, { recursive: true, force: true });
+  }
 });
 
 // The branch's upstream, when it is a remote branch: its commit, and whether

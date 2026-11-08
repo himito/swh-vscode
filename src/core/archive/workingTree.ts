@@ -18,6 +18,56 @@ import type { FileStatus, SwhidInfo } from './types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/**
+ * The SWHID of a commit.
+ *
+ * @param commit - The commit's hash.
+ * @returns Its revision SWHID, `swh:1:rev:<commit>`.
+ */
+const revisionSwhid = (commit: string) => Swhid.of('rev', commit);
+
+/** Where a file or directory is in its repository. */
+type RepoPath = {
+  /** The repository's root directory. */
+  root: string;
+  /** The path relative to the root, with `/` separators; `.` for the root. */
+  rel: string;
+};
+
+/**
+ * The version of a file or directory a SWHID is computed for, and what the
+ * archive holds of it: the archived version, or the working tree's.
+ */
+type SwhidTarget = {
+  /** Its core SWHID. */
+  core: Swhid;
+  /** The commit to anchor the SWHID on, if any. */
+  anchor: Maybe<string>;
+  /** The revision SWHID of the commit whose version it is: only for the archived version. */
+  version: Maybe<Swhid>;
+  /** Whether the archive holds it. */
+  archived: boolean;
+};
+
+/** A path's version in an archived commit. */
+type ArchivedVersion = {
+  /** The archived commit, which holds the path. */
+  commit: string;
+  /** The hash of the path's object in it: a blob for a file, a tree for a directory. */
+  hash: string;
+};
+
+/** The types of Git objects a path can name: `blob` a file, `tree` a directory. */
+type GitObjectType = 'blob' | 'tree';
+
+/** A Git command: the directory to run it in, and its arguments. */
+type GitCommand = {
+  /** The directory to run it in. */
+  dir: string;
+  /** Its arguments, e.g. `['hash-object', '--', file]`. */
+  args: string[];
+};
+
 /** Number of the most recent commits that are considered as a SWHID's anchor. */
 export const ANCHOR_CANDIDATES_MAX = 100;
 
@@ -46,7 +96,7 @@ export class WorkingTree {
     private readonly git: Git,
     private readonly holdings: Holdings,
     private readonly origins: Origins,
-  ) {}
+  ) { }
 
   // ---------------------------------------------------------------- SWHIDs
 
@@ -65,11 +115,25 @@ export class WorkingTree {
    * repository uses SHA-256.
    */
   async contentSwhid(file: string, root: Maybe<string>): Promise<Swhid> {
-    const hash = root
-      ? await this.git.get(root, ['hash-object', '--path', relativePath(root, file), '--', file])
-      : await this.git.get(path.dirname(file), ['hash-object', '--no-filters', '--', file]);
+    const { dir, args } = WorkingTree.hashCommand(file, root);
+    const hash = await this.git.get(dir, args);
     if (!hash) throw new UserError(`Cannot hash ${file} with git`);
     return Swhid.of('cnt', hash);
+  }
+
+  /**
+   * The Git command that hashes a file's content: where to run it, and its arguments.
+   *
+   * @param file - The file's real path.
+   * @param root - The root of the repository holding it, if any.
+   * @returns In a repository, `git hash-object --path`: the content as Git
+   * would store it at its path, its attributes and filters applied (e.g. line
+   * endings). Outside one, `git hash-object --no-filters`: the bytes as they
+   * are on disk.
+   */
+  private static hashCommand(file: string, root: Maybe<string>): GitCommand {
+    if (root) return { dir: root, args: ['hash-object', '--path', relativePath(root, file), '--', file] };
+    return { dir: path.dirname(file), args: ['hash-object', '--no-filters', '--', file] };
   }
 
   /**
@@ -93,12 +157,32 @@ export class WorkingTree {
    * @param type - Only an object of that type: `blob` for a file, `tree` for a directory.
    * @returns The object's hash, or `undefined` when there is none (of that type).
    */
-  private async objectAt(root: string, commit: string, rel: string, type?: 'blob' | 'tree'): Promise<Maybe<string>> {
-    const object = rel === '.' ? `${commit}^{tree}` : `${commit}:${rel}`;
-    const hash = await this.git.get(root, ['rev-parse', '--verify', '-q', object]);
-    if (!hash) return undefined;
-    if (type && type !== (await this.git.get(root, ['cat-file', '-t', hash]))) return undefined;
-    return hash;
+  private async objectAt(root: string, commit: string, rel: string, type?: GitObjectType): Promise<Maybe<string>> {
+    const hash = await this.git.get(root, ['rev-parse', '--verify', '-q', WorkingTree.objectName(commit, rel)]);
+    if (hash === undefined || type === undefined) return hash;
+    return (await this.objectType(root, hash)) === type ? hash : undefined;
+  }
+
+  /**
+   * The type of an object of the repository.
+   *
+   * @param root - The repository's root directory.
+   * @param hash - The object's hash.
+   * @returns Its type, e.g. `blob` or `tree`, as `git cat-file -t` gives it.
+   */
+  private objectType(root: string, hash: string): Promise<Maybe<string>> {
+    return this.git.get(root, ['cat-file', '-t', hash]);
+  }
+
+  /**
+   * How Git names the object at a path in a commit or tree.
+   *
+   * @param commit - A commit or tree hash, or a revision such as `HEAD`.
+   * @param rel - The path relative to the root; `.` for the root's tree.
+   * @returns `<commit>:<path>`, or `<commit>^{tree}` for the root.
+   */
+  private static objectName(commit: string, rel: string): string {
+    return rel === '.' ? `${commit}^{tree}` : `${commit}:${rel}`;
   }
 
   /**
@@ -108,9 +192,12 @@ export class WorkingTree {
    * @returns Those the archive holds, in the same order.
    * @throws {@link UserError} as {@link Holdings.rememberKnown} does.
    */
-  private async archivedCommits(commits: string[]): Promise<string[]> {
-    await this.holdings.rememberKnown(commits.map((commit) => Swhid.of('rev', commit)));
-    return commits.filter((commit) => this.holdings.isKnownArchived(Swhid.of('rev', commit)));
+  private async archivedCommits(commits: readonly string[]): Promise<string[]> {
+    const revisions = commits.map((commit) => ({ commit, swhid: revisionSwhid(commit) }));
+
+    // one request for all of them, then each answer read from the memo
+    await this.holdings.rememberKnown(revisions.map(({ swhid }) => swhid));
+    return revisions.filter(({ swhid }) => this.holdings.isKnownArchived(swhid)).map(({ commit }) => commit);
   }
 
   /**
@@ -119,15 +206,19 @@ export class WorkingTree {
    * @param root - The repository's root directory.
    * @param rel - The path relative to the root.
    * @param dir - Whether the path is a directory.
-   * @returns `[commit, hash]` for the most recent of HEAD's last
-   * `ANCHOR_CANDIDATES_MAX` commits that is archived and holds the
-   * path, or `undefined` when none does.
+   * @returns The most recent of HEAD's last `ANCHOR_CANDIDATES_MAX`
+   * commits that is archived and holds the path, and the path's object in
+   * it; `undefined` when none does.
    * @throws {@link UserError} as {@link Holdings.rememberKnown} does.
    */
-  private async archivedVersion(root: string, rel: string, dir: boolean): Promise<[string, string] | undefined> {
-    for (const commit of await this.archivedCommits(await this.revList(root, 'HEAD'))) {
-      const hash = await this.objectAt(root, commit, rel, dir ? 'tree' : 'blob');
-      if (hash) return [commit, hash];
+  private async archivedVersion(root: string, rel: string, dir: boolean): Promise<Maybe<ArchivedVersion>> {
+    const recent = await this.revList(root, 'HEAD');
+
+    // a file's version is a blob, a directory's a tree: not one of the other kind
+    const type = dir ? 'tree' : 'blob';
+    for (const commit of await this.archivedCommits(recent)) {
+      const hash = await this.objectAt(root, commit, rel, type);
+      if (hash) return { commit, hash };
     }
     return undefined;
   }
@@ -143,7 +234,7 @@ export class WorkingTree {
    * @param rel - The path relative to the root, taken literally.
    * @returns The commit's hash, or `undefined` when no commit changed it.
    */
-  lastCommit(root: string, rel: string) {
+  lastCommit(root: string, rel: string): Promise<Maybe<string>> {
     return this.git.get(root, ['--literal-pathspecs', 'rev-list', '-1', 'HEAD', '--', rel]);
   }
 
@@ -153,15 +244,25 @@ export class WorkingTree {
    * @param root - The repository's root directory.
    * @param rel - The path relative to the root.
    * @param hash - The object's hash.
+   * @remarks
+   * Those are the commits since the one that last changed the path: they
+   * all hold the same object there, HEAD's. An older version of the path is
+   * not this object, so the candidates are none unless HEAD holds it.
+   *
    * @returns The commits from HEAD back to the one that last changed the
    * path, most recent first, at most `ANCHOR_CANDIDATES_MAX` plus that
    * one; none when HEAD does not hold `hash` at `rel`.
    */
   private async anchorCandidates(root: string, rel: string, hash: string): Promise<string[]> {
-    if (hash !== (await this.objectAt(root, 'HEAD', rel))) return [];
-    const last = await this.lastCommit(root, rel);
-    if (!last) return [];
-    return uniq([...(await this.revList(root, 'HEAD', '--not', `${last}^@`)), last]);
+    if ((await this.objectAt(root, 'HEAD', rel)) !== hash) return [];
+
+    const lastChange = await this.lastCommit(root, rel);
+    if (!lastChange) return [];
+
+    // what HEAD reaches but the last change's parents do not: that change, and every commit since
+    const since = await this.revList(root, 'HEAD', '--not', `${lastChange}^@`);
+    // the list stops at ANCHOR_CANDIDATES_MAX commits: the last change, the surest anchor, may be cut off
+    return uniq([...since, lastChange]);
   }
 
   /**
@@ -175,11 +276,14 @@ export class WorkingTree {
    * @throws {@link UserError} as {@link Holdings.rememberKnown} does.
    */
   private async anchor(root: string, rel: string, coreSwhid: Swhid): Promise<Maybe<string>> {
-    const hash = coreSwhid.hash;
-    const commits = await this.anchorCandidates(root, rel, hash);
-    await this.holdings.rememberKnown([coreSwhid, ...commits.map((commit) => Swhid.of('rev', commit))]);
+    const commits = await this.anchorCandidates(root, rel, coreSwhid.hash);
+    // one request for the object and its candidates: the commits are then all
+    // remembered for archivedCommits, and the object's own status for the caller
+    await this.holdings.rememberKnown([coreSwhid, ...commits.map(revisionSwhid)]);
+
     for (const commit of await this.archivedCommits(commits)) {
-      if (hash === (await this.objectAt(root, commit, rel))) return commit;
+      // a commit of a branch merged since the last change may hold another version
+      if ((await this.objectAt(root, commit, rel)) === coreSwhid.hash) return commit;
     }
     return undefined;
   }
@@ -231,6 +335,7 @@ export class WorkingTree {
   async worktreeSwhid(file: string, root: Maybe<string>): Promise<Swhid> {
     if ((await fs.stat(file)).isDirectory()) {
       if (!root) throw new UserError('Not inside a Git repository');
+
       const swhid = await this.dirSwhid(file, root);
       if (!swhid) throw new UserError(`Nothing is tracked in ${file}`);
       return swhid;
@@ -249,13 +354,14 @@ export class WorkingTree {
    * recent commits holding it is archived.
    * @throws {@link UserError} as {@link Holdings.rememberKnown} does.
    */
-  private async archivedTarget(root: string, rel: string, dir: boolean) {
+  private async archivedTarget(root: string, rel: string, dir: boolean): Promise<Maybe<SwhidTarget>> {
     const version = await this.archivedVersion(root, rel, dir);
     if (!version) return undefined;
-    const versionSwhid = Swhid.of(dir ? 'dir' : 'cnt', version[1]);
+
+    const versionSwhid = Swhid.of(dir ? 'dir' : 'cnt', version.hash);
     // the commit of the archived version holds it, hence its content
     this.holdings.rememberArchived(versionSwhid);
-    return { core: versionSwhid, anchor: version[0], version: Swhid.of('rev', version[0]), archived: true };
+    return { core: versionSwhid, anchor: version.commit, version: revisionSwhid(version.commit), archived: true };
   }
 
   /**
@@ -263,23 +369,23 @@ export class WorkingTree {
    *
    * @remarks
    * The archive is asked about it only with a public origin, or outside a
-   * repository: a repository without a public origin cannot be archived.
+   * repository, as its content may have been archived from elsewhere: a
+   * repository without a public origin cannot be archived. It is anchored
+   * only in a repository with a public origin.
    *
-   * @param root - The root of the repository holding it, if any.
-   * @param rel - The path relative to `root`.
+   * @param place - Where it is in its repository, if it is in one.
    * @param pub - Whether the repository has a public origin.
    * @param worktree - Gives its core SWHID, see {@link WorkingTree.worktreeSwhid}.
    * @returns Its core SWHID, its anchor commit if any, and whether it is archived.
    * @throws {@link UserError} when Git or the archive fails.
    */
-  private async worktreeTarget(root: Maybe<string>, rel: Maybe<string>, pub: boolean, worktree: () => Promise<Swhid>) {
-    const worktreeSwhid = await worktree();
-    return {
-      core: worktreeSwhid,
-      anchor: pub && root ? await this.anchor(root, rel!, worktreeSwhid) : undefined,
-      archived: pub || !root ? await this.holdings.isArchived(worktreeSwhid) : false,
-      version: undefined as Maybe<Swhid>,
-    };
+  private async worktreeTarget(place: Maybe<RepoPath>, pub: boolean, worktree: () => Promise<Swhid>): Promise<SwhidTarget> {
+    const core = await worktree();
+    // first: anchoring asks the archive about the SWHID too, in the same request
+    const anchor = pub && place ? await this.anchor(place.root, place.rel, core) : undefined;
+    const askable = pub || !place;
+    const archived = askable ? await this.holdings.isArchived(core) : false;
+    return { core, anchor, archived, version: undefined };
   }
 
   /**
@@ -303,32 +409,50 @@ export class WorkingTree {
     archivedVersion: boolean,
     worktree: () => Promise<Swhid>,
   ): Promise<SwhidInfo> {
-    const rel = root ? relativePath(root, file) : undefined;
-    const info = root ? await this.origins.originQuiet(root) : null;
-    const origin = info?.origin;
-    const pub = isPublicOrigin(origin);
+    const place: Maybe<RepoPath> = root ? { root, rel: relativePath(root, file) } : undefined;
+    const info = place ? await this.origins.originQuiet(place.root) : null;
+    const pub = isPublicOrigin(info?.origin);
     const dir = (await fs.stat(file)).isDirectory();
-    const target = (archivedVersion && pub && root ? await this.archivedTarget(root, rel!, dir) : undefined) ??
-      (await this.worktreeTarget(root, rel, pub, worktree));
-    // the selection's lines hold as long as the archived version is the working tree's
-    const keepLines = !target.version || (lines !== undefined && !dir && target.core.equals(await worktree()));
-    const result: SwhidInfo = {
-      swhid: target.core.qualify({
-        origin,
-        visit: info?.snapshot ? Swhid.of('snp', info.snapshot) : undefined,
-        anchor: target.anchor ? Swhid.of('rev', target.anchor) : undefined,
-        path: rel && anchorPath(rel),
-        lines: keepLines ? lines : undefined,
-      }),
+
+    // the archived version when asked for and found, else the working tree's
+    const archived = archivedVersion && pub && place ? await this.archivedTarget(place.root, place.rel, dir) : undefined;
+    const target = archived ?? (await this.worktreeTarget(place, pub, worktree));
+
+    const swhid = target.core.qualify({
+      origin: info?.origin,
+      visit: info?.snapshot ? Swhid.of('snp', info.snapshot) : undefined,
+      anchor: target.anchor ? revisionSwhid(target.anchor) : undefined,
+      path: place && anchorPath(place.rel),
+      lines: await WorkingTree.keptLines(target, lines, dir, worktree),
+    });
+
+    return {
+      swhid,
       core: target.core,
       archived: target.archived,
+      ...(info && { origin: info.origin, 'origin-archived': info.archived }),
+      ...(target.version && { version: target.version }),
     };
-    if (origin) {
-      result.origin = origin;
-      result['origin-archived'] = info!.archived;
-    }
-    if (target.version) result.version = target.version;
-    return result;
+  }
+
+  /**
+   * The selected lines that still hold for a target.
+   *
+   * @remarks
+   * The lines were selected in the working tree. They hold for its version,
+   * and for an archived version of the same content; another content's line
+   * numbers would name other lines.
+   *
+   * @param target - What the SWHID is computed for.
+   * @param lines - The lines selected, if any.
+   * @param dir - Whether the target is a directory, which has no lines.
+   * @param worktree - Gives the working tree's core SWHID; only called when
+   * an archived version may have the same content.
+   * @returns `lines`, or `undefined` when they no longer hold.
+   */
+  private static async keptLines(target: SwhidTarget, lines: Maybe<LineRange>, dir: boolean, worktree: () => Promise<Swhid>): Promise<Maybe<LineRange>> {
+    if (lines === undefined || target.version === undefined) return lines;
+    return !dir && target.core.equals(await worktree()) ? lines : undefined;
   }
 
   /**
@@ -360,6 +484,7 @@ export class WorkingTree {
       return await this.directSwhid(file, root, lines, archivedVersion, worktree);
     } catch (error) {
       if (!(error instanceof UserError)) throw error;
+
       // the SWHID from Git alone
       const worktreeSwhid = await worktree();
       const gitSwhid = worktreeSwhid.qualify({ lines });

@@ -34,6 +34,6 @@ export { HttpArchiveApi, type HttpArchiveDeps, KNOWN_BATCH_SIZE } from './adapte
 export { type ArchiveApi, type CitationTarget, type KnownAnswers, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from './archiveApi';
 export { Holdings } from './holdings';
 export { Origins, VISITS_SHOWN } from './origins';
-export { WorkingTree } from './workingTree';
+export { ANCHOR_CANDIDATES_MAX, WorkingTree } from './workingTree';
 export type { CitationAnswer, FileStatus, OriginInfo, OriginVisits, SaveRequest, SwhDeps, SwhidInfo, Token, TreeNode, Visit } from './types';
 export { Swh } from './swh';
