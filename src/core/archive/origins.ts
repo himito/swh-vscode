@@ -131,12 +131,12 @@ export class SwhOrigins extends SwhKnown {
    * The last {@link VISITS_SHOWN} visits of an origin.
    *
    * @param info - The origin's status; a non-archived origin has no visits, and the archive is not asked.
-   * @returns The origin URL and its visits, most recent first.
+   * @returns The origin URL, whether it is archived, and its visits, most recent first.
    * @throws {@link UserError} as {@link ArchiveApi.visits} does.
    */
   private async originVisits(info: OriginInfo): Promise<OriginVisits> {
-    if (!info.archived) return { origin: info.origin, visits: [] };
-    return { origin: info.origin, visits: await this.archive.visits(info.origin, VISITS_SHOWN) };
+    if (!info.archived) return { origin: info.origin, archived: false, visits: [] };
+    return { origin: info.origin, archived: true, visits: await this.archive.visits(info.origin, VISITS_SHOWN) };
   }
 
   /**

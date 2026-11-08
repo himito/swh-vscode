@@ -163,7 +163,8 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   │   │   └── lineRange.ts   LineRange: the lines qualifier
 │   │   ├── git.ts       Running Git, and the temporary index copies
 │   │   ├── archive/     The Software Heritage client (class Swh): what the archive holds, with Git
-│   │   │   ├── index.ts       Swh itself: scans, refresh, why a file is not archived
+│   │   │   ├── index.ts       The package's exports
+│   │   │   ├── swh.ts         Swh itself: scans, refresh, why a file is not archived
 │   │   │   ├── swhids.ts      SWHIDs of files and directories, anchored on archived commits
 │   │   │   ├── origins.ts     Origins, visits, save requests
 │   │   │   ├── known.ts       Which SWHIDs the archive holds
@@ -183,7 +184,8 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │       ├── index.ts     The folder's public API, re-exported
 │       ├── apiToken.ts  The API token: the environment's, else the stored one
 │       ├── commands/    The commands, by group (class Commands)
-│       │   ├── index.ts     Commands: builds the groups on one context
+│       │   ├── index.ts     The folder's exports
+│       │   ├── commands.ts  Commands: builds the groups on one context
 │       │   ├── context.ts   What every group shares: the target, the repository, its origin
 │       │   ├── archive.ts   Status, visits, save requests, refresh
 │       │   ├── swhid.ts     SWHIDs, permalinks, Markdown links
@@ -214,7 +216,7 @@ Only [extension.ts](src/extension.ts) and the modules in [src/ui/](src/ui/) impo
 
 Within `core/`, each concern is a package: a folder with its own `index.ts` (`shared/`, `swhid/`, `archive/`, `citation/`), or a single file (`origin.ts`, `git.ts`, `scan.ts`). A package imports another only through its alias, `#core/<package>` (`import { Swhid } from '#core/swhid'`), which points at its `index.ts`; the files of one package import each other with relative paths. The packages depend on each other in one direction only: `shared` ← `origin` ← `swhid` ← `git` ← `archive` ← `citation`, `scan`. Each may import those to its left, never one to its right, so there is no cycle between them.
 
-Between folders, modules import through an alias, never a relative path that leaves their folder: `#core` and `#ui` for the whole of each (`import { Swh } from '#core'`), `#core/<package>` between the core's packages, and `#ui/<module>` or `#ui/commands` within the UI (`import { info } from '#ui/helpers'`). Within a folder, modules import each other with relative paths. The aliases are Node's [subpath imports](https://nodejs.org/api/packages.html#subpath-imports), defined in the `imports` field of [package.json](package.json): each points TypeScript at the sources (`types`) and Node at the compiled files in `out/` (`default`), which is why [tsconfig.json](tsconfig.json) uses `"module": "node16"`. A pattern such as `#core/*` maps a single file (`#core/origin` is `origin.ts`); a folder needs an entry of its own, as Node does not look for its `index.ts`: add one with each new folder. If `outDir` or the folders change, update both paths there. `Swh` is built in layers, each file's class extending the one below it: `known` → `origins` → `swhids` → `Swh`.
+Between folders, modules import through an alias, never a relative path that leaves their folder: `#core` and `#ui` for the whole of each (`import { Swh } from '#core'`), `#core/<package>` between the core's packages, and `#ui/<module>` or `#ui/commands` within the UI (`import { info } from '#ui/helpers'`). Within a folder, modules import each other with relative paths. The aliases are Node's [subpath imports](https://nodejs.org/api/packages.html#subpath-imports), defined in the `imports` field of [package.json](package.json): each points TypeScript at the sources (`types`) and Node at the compiled files in `out/` (`default`), which is why [tsconfig.json](tsconfig.json) uses `"module": "node16"`. A pattern such as `#core/*` maps a single file (`#core/origin` is `origin.ts`); a folder needs an entry of its own, as Node does not look for its `index.ts`: add one with each new folder. If `outDir` or the folders change, update both paths there. `Swh` is built in layers, each file's class extending the one below it: `known` → `origins` → `swhids` → `swh`. A folder's `index.ts` holds only its exports: the code lives in the other files.
 
 SWHIDs are values of the [`Swhid`](src/core/swhid/swhid.ts) class, not strings: `Swhid.of(type, hash)` and `Swhid.parse(text)` are the only ways to make one, and both check it, so a `Swhid` is always valid. It is immutable: `qualify({ origin, visit, anchor, path, lines })` gives a new one. Its qualifiers are a value too, [`Qualifiers`](src/core/swhid/qualifiers.ts): `Qualifiers.of` keeps only those its context allows (an origin and its visit only when public, a path only with an anchor), and `Qualifiers.parse` checks each one. Its `lines` are a value too, [`LineRange`](src/core/swhid/lineRange.ts), checked when made: a range from line 1, its last line its first or after. Two instances of the same SWHID are different objects, so compare them with `equals`, and key maps by `toString()`, the canonical text. SWHIDs become text only at the edges: the `ArchiveApi` port takes their text, as the Web API does, and so do the clipboard and the URLs. A SWHID the user typed, or found in a document, is passed on as written.
 

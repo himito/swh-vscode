@@ -9,9 +9,6 @@
  * Web API. Another implementation, e.g. a fake archive in memory for the
  * tests, can be given to {@link Swh} instead (see {@link SwhDeps}).
  *
- * This is the "ports and adapters" (hexagonal) architecture: the interface
- * is the port, its implementations the adapters.
- *
  * @packageDocumentation
  */
 
@@ -34,26 +31,26 @@ export const RATE_LIMIT_MESSAGE = 'Software Heritage API rate limit reached';
  */
 export type LatestVisit =
   | {
-      /** The archive has not archived the origin. */
-      archived: false;
-    }
+    /** The archive has not archived the origin. */
+    archived: false;
+  }
   | {
-      /** The archive has archived the origin. */
-      archived: true;
-      /** The visit; `undefined` when the archive's description of it is unusable. */
-      visit: Maybe<Visit>;
-    };
+    /** The archive has archived the origin. */
+    archived: true;
+    /** The visit; `undefined` when the archive's description of it is unusable. */
+    visit: Maybe<Visit>;
+  };
 
 /** What a citation is asked for: a SWHID, or an origin's latest snapshot. */
 export type CitationTarget =
   | {
-      /** The SWHID to cite, qualified or not, as its canonical text. */
-      swhid: string;
-    }
+    /** The SWHID to cite, qualified or not, as its canonical text. */
+    swhid: string;
+  }
   | {
-      /** The public URL of the origin whose latest snapshot to cite. */
-      origin: string;
-    };
+    /** The public URL of the origin whose latest snapshot to cite. */
+    origin: string;
+  };
 
 /** The archive's rate limit of requests without a token. */
 export type RateLimit = {

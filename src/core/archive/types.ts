@@ -44,6 +44,11 @@ export type Visit = {
 export type OriginVisits = {
   /** The origin URL, normalized as the archive names it. */
   origin: string;
+  /**
+   * Whether the archive holds the origin. An archived origin may still come
+   * with no visits, e.g. when the archive's descriptions of them are unusable.
+   */
+  archived: boolean;
   /** Its visits, most recent first; none when it is not archived. */
   visits: Visit[];
 };

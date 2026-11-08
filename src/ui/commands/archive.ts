@@ -151,8 +151,9 @@ export class ArchiveCommands {
    * Lists the last archival visits of the repository's origin in a report.
    *
    * @remarks
-   * Implements `swh.visits` and, with `askOrigin`, `swh.visitsOther`. When the
-   * origin is not archived, says so instead of showing an empty report.
+   * Implements `swh.visits` and, with `askOrigin`, `swh.visitsOther`. Instead
+   * of an empty report, says that the origin is not archived, or that it is
+   * but the archive lists no visit of it that can be shown.
    *
    * @param askOrigin - Whether to ask for another repository's URL; `false` by default.
    * @throws {@link core!Cancelled} when the user dismisses the prompt.
@@ -163,8 +164,12 @@ export class ArchiveCommands {
     const origin = await this.ctx.originArg('list the visits of', askOrigin);
     const originVisits = await busy('Software Heritage: listing the visits…', () => this.fetchVisits(origin));
 
-    if (!originVisits.visits.length) {
+    if (!originVisits.archived) {
       info(`${originVisits.origin} is not archived`);
+      return;
+    }
+    if (!originVisits.visits.length) {
+      info(`${originVisits.origin} is archived, but the archive lists no visit of it that can be shown`);
       return;
     }
     await this.ctx.reports.show('swh visits.txt', this.visitsText(originVisits.origin, originVisits.visits));

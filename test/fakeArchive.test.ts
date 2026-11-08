@@ -122,7 +122,9 @@ test("an origin's visits, by URL", async () => {
   const visit = { date: '2026-07-01T10:00:00+00:00', status: 'full', snapshot: 'ab'.repeat(20) };
   const archive = new FakeArchive(new Set(), new Map([['https://example.org/me/repo.git', visit]]));
   const found = await swhOn(archive).visitsOf('https://example.org/me/repo');
-  assert.deepEqual(found, { origin: 'https://example.org/me/repo.git', visits: [visit] });
+  assert.deepEqual(found, { origin: 'https://example.org/me/repo.git', archived: true, visits: [visit] });
+  // not archived: no visits, and the archive is not asked for them
+  assert.deepEqual(await swhOn(archive).visitsOf('https://example.org/me/other'), { origin: 'https://example.org/me/other', archived: false, visits: [] });
   await assert.rejects(swhOn(archive).visitsOf('/srv/repo'), /Not a public repository URL/);
 });
 
