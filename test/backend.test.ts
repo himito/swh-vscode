@@ -16,7 +16,7 @@ import { execFileSync } from 'child_process';
 import { promises as fs, realpathSync, mkdtempSync, writeFileSync, mkdirSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Git, HttpArchiveApi, Swh, Swhid } from '#core';
+import { Git, HttpArchiveApi, LineRange, Swh, Swhid } from '#core';
 
 /** The temporary Git repository the tests run on, created before them. */
 let dir: string;
@@ -186,7 +186,7 @@ test('qualified SWHID, anchored and archived', async () => {
   const aSwhid = 'swh:1:cnt:' + git('rev-parse', 'HEAD:a.txt');
   reset([aSwhid, 'swh:1:rev:' + commit], ['https://example.org/me/repo']);
   const s = swh();
-  const info = await s.qualifiedSwhid(path.join(dir, 'a.txt'), '1');
+  const info = await s.qualifiedSwhid(path.join(dir, 'a.txt'), LineRange.of(1));
   assert.equal(
     String(info.swhid),
     `${aSwhid};origin=https://example.org/me/repo;visit=swh:1:snp:${'ab'.repeat(20)};anchor=swh:1:rev:${commit};path=/a.txt;lines=1`,
@@ -197,13 +197,13 @@ test('qualified SWHID, anchored and archived', async () => {
   assert.equal(s.rateLimitText(), '20/120');
 
   // unedited: the archived version is the working tree's, its lines hold
-  const same = await s.qualifiedSwhid(path.join(dir, 'a.txt'), '1', true);
+  const same = await s.qualifiedSwhid(path.join(dir, 'a.txt'), LineRange.of(1), true);
   assert.ok(same.version?.equals(Swhid.of('rev', commit)));
-  assert.equal(same.swhid.qualifiers.lines, '1');
+  assert.equal(String(same.swhid.qualifiers.lines), '1');
 
   // edited since: the archived version is that of the commit
   writeFileSync(path.join(dir, 'a.txt'), 'edited\n');
-  const archivedInfo = await s.qualifiedSwhid(path.join(dir, 'a.txt'), '1', true);
+  const archivedInfo = await s.qualifiedSwhid(path.join(dir, 'a.txt'), LineRange.of(1), true);
   assert.equal(String(archivedInfo.core), aSwhid);
   assert.ok(archivedInfo.version?.equals(Swhid.of('rev', commit)));
   assert.equal(archivedInfo.swhid.qualifiers.lines, undefined);

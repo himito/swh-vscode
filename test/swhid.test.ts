@@ -18,13 +18,14 @@ import {
   encodeOrigin,
   encodePath,
   findSwhids,
-  lineRange,
+  LineRange,
   normalizeOrigin,
   originCandidates,
   originName,
   parseOrigin,
   pathOrigin,
   scanSummary,
+  Qualifiers,
   Swhid,
   UserError,
 } from '#core';
@@ -84,14 +85,14 @@ test('qualify encoding', () => {
   const rev = Swhid.of('rev', sha('e'));
   const qualified = cnt.qualify({ origin: 'https://h/o r', anchor: rev, path: '/src/my file é.el' });
   assert.equal(qualified.toString(), `swh:1:cnt:${sha('c')};origin=https://h/o%20r;anchor=swh:1:rev:${sha('e')};path=/src/my%20file%20%C3%A9.el`);
-  assert.deepEqual(Swhid.parse(qualified.toString()).qualifiers, { origin: 'https://h/o r', anchor: rev, path: '/src/my file é.el' });
+  assert.deepEqual(Swhid.parse(qualified.toString()).qualifiers.values, { origin: 'https://h/o r', anchor: rev, path: '/src/my file é.el' });
   // a character outside the BMP, left unescaped, survives decoding
   assert.equal(Swhid.parse(`swh:1:cnt:${sha('c')};origin=https://h/\u{1F600}%20r`).qualifiers.origin, 'https://h/\u{1F600} r');
   // the root, lines, a snapshot
-  const dir = Swhid.of('dir', sha('d')).qualify({ origin: 'https://h/r', visit: Swhid.of('snp', sha('a')), anchor: rev, path: '/', lines: '3-4' });
+  const dir = Swhid.of('dir', sha('d')).qualify({ origin: 'https://h/r', visit: Swhid.of('snp', sha('a')), anchor: rev, path: '/', lines: LineRange.of(3, 4) });
   assert.equal(dir.toString(), `swh:1:dir:${sha('d')};origin=https://h/r;visit=swh:1:snp:${sha('a')};anchor=swh:1:rev:${sha('e')};path=/;lines=3-4`);
   // a private origin and its visit are left out, a path without an anchor too
-  assert.equal(cnt.qualify({ origin: '/srv/repo', visit: Swhid.of('snp', sha('a')), path: '/f', lines: '2' }).toString(), `swh:1:cnt:${sha('c')};lines=2`);
+  assert.equal(cnt.qualify({ origin: '/srv/repo', visit: Swhid.of('snp', sha('a')), path: '/f', lines: LineRange.of(2) }).toString(), `swh:1:cnt:${sha('c')};lines=2`);
   assert.equal(pathOrigin('https://h/a b?c#d'), 'https://h/a%20b%3Fc%23d');
 });
 
@@ -107,20 +108,49 @@ test('Swhid value', () => {
   assert.throws(() => Swhid.of('cnt', 'abc'), UserError);
   assert.throws(() => Swhid.of('cnt', 'a'.repeat(64)), /SHA-256/);
 
-  const lines = cnt.qualify({ lines: '1' });
+  const lines = cnt.qualify({ lines: LineRange.of(1) });
   assert.equal(lines.toShortString(), 'swh:1:cnt:0123456789;lines=1');
   assert.ok(lines.core.equals(cnt));
   assert.ok(!lines.equals(cnt));
   assert.ok(Swhid.parse(lines.toString()).equals(lines));
   // qualifying replaces the qualifiers, and leaves the original alone
   assert.equal(lines.qualify({}).toString(), cnt.toString());
-  assert.deepEqual(lines.qualifiers, { lines: '1' });
+  assert.deepEqual(lines.qualifiers.values, { lines: LineRange.of(1) });
 
   assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};bytes=1`), /Unknown SWHID qualifier/);
   assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};lines=0-2`), /Not a line range/);
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};lines=5-2`), /Not a line range/);
+  // what the text could not show again: an empty value, a qualifier given twice
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};origin=`), /has no value/);
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};lines`), /has no value/);
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};lines=1;lines=2`), /given twice/);
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};`), /Empty SWHID qualifier/);
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};;lines=1`), /Empty SWHID qualifier/);
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};anchor=swh:1:rev:${hash};path=src/a`), /A path starts with \//);
   assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};visit=swh:1:rev:${hash}`), /A visit is a snapshot/);
   assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};anchor=swh:1:cnt:${hash}`), /An anchor holds objects/);
   assert.equal(Swhid.tryParse('swh:1:cnt:0123'), undefined);
+});
+
+// Qualifiers are a value: filtered by their context, parsed back to equal
+// ones, and empty for a core SWHID.
+test('Qualifiers value', () => {
+  const rev = Swhid.of('rev', sha('e'));
+  const given = Qualifiers.of({ origin: 'https://h/r', anchor: rev, path: '/a', lines: LineRange.of(2, 3) });
+  assert.equal(given.toString(), `;origin=https://h/r;anchor=swh:1:rev:${sha('e')};path=/a;lines=2-3`);
+  assert.equal(given.anchor, rev);
+  assert.ok(Qualifiers.parse(given.toString().substring(1)).equals(given));
+  // a private origin and its visit, and a path without an anchor, are left out
+  assert.ok(Qualifiers.of({ origin: '/srv/r', visit: Swhid.of('snp', sha('a')), path: '/a' }).isEmpty);
+  // parsed as written: no context rule applies
+  assert.equal(Qualifiers.parse('path=/a').path, '/a');
+  assert.ok(Qualifiers.NONE.isEmpty);
+  assert.equal(Qualifiers.NONE.toString(), '');
+  assert.ok(Swhid.of('cnt', sha('c')).qualifiers.equals(Qualifiers.NONE));
+  assert.ok(Object.isFrozen(given.values));
+  // an empty value writes no qualifier, so none is kept
+  assert.ok(Qualifiers.of({ origin: '' }).isEmpty);
+  assert.deepEqual(Qualifiers.of({ anchor: rev, path: '' }).values, { anchor: rev });
 });
 
 // Path ancestors and origin names.
@@ -133,10 +163,21 @@ test('helpers', () => {
   assert.equal(originName('C:\\Users\\me\\repo.git'), 'repo');
 });
 
-test('lineRange', () => {
-  assert.equal(lineRange(2, 3), '2-3');
-  assert.equal(lineRange(5, 5), '5');
-  assert.equal(lineRange(1, 120), '1-120');
+// A line range is a value: made checked from line numbers or text, and
+// written as the `lines` qualifier writes it.
+test('LineRange', () => {
+  assert.equal(LineRange.of(2, 3).toString(), '2-3');
+  assert.equal(LineRange.of(5).toString(), '5');
+  assert.equal(LineRange.of(1, 120).toString(), '1-120');
+  assert.ok(LineRange.of(5, 5).isSingle);
+  assert.ok(LineRange.parse('2-3').equals(LineRange.of(2, 3)));
+  assert.ok(LineRange.parse('7').equals(LineRange.of(7)));
+  assert.equal(JSON.stringify({ lines: LineRange.of(2, 3) }), '{"lines":"2-3"}');
+  for (const bad of ['0', '0-2', '5-2', '2-', '-2', 'a', '', '1-2-3', '9'.repeat(20)]) {
+    assert.throws(() => LineRange.parse(bad), /Not a line range/, bad);
+  }
+  assert.throws(() => LineRange.of(3, 1), /Not a line range/);
+  assert.throws(() => LineRange.of(1.5), /Not a line range/);
 });
 
 test('Swhid.isValid', () => {
@@ -175,7 +216,7 @@ test('citation', () => {
   const snp = Swhid.of('snp', sha('0'));
   const [entry] = citation('failed', snp, 'repo', undefined, '2026-07-01T10:00:00Z');
   assert.equal(entry, `@software{swh-snp-0000000,\n    title = {repo},\n    date = {2026-07-01},\n    year = {2026},\n    swhid = {${snp}}\n}\n`);
-  assert.equal(citation('failed', cnt.qualify({ lines: '2-3' }))[0].split(',')[0], '@codefragment{swh-cnt-94a9ed0-L2-L3');
+  assert.equal(citation('failed', cnt.qualify({ lines: LineRange.of(2, 3) }))[0].split(',')[0], '@codefragment{swh-cnt-94a9ed0-L2-L3');
   assert.equal(citation('failed', Swhid.of('dir', sha('9')))[0].split('{')[0], '@softwareversion');
   assert.deepEqual(citation({ entry: '@x{}' }, cnt), ['@x{}', 'archive']);
 });

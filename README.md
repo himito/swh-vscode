@@ -164,7 +164,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   │   ├── git.ts       Running Git, and the temporary index copies
 │   │   ├── http.ts      HTTP requests, through fetch
 │   │   ├── errors.ts    The error types: UserError, Cancelled
-│   │   ├── swhid.ts     The Swhid value object: parsing, qualifiers, canonical text
+│   │   ├── swhid.ts     The Swhid, Qualifiers and LineRange value objects: parsing, checking, canonical text
 │   │   ├── origin.ts    Origins: normalizing remote URLs, and their encodings
 │   │   ├── encoding.ts  Percent-encoding, query strings, base URLs
 │   │   ├── citation.ts  BibTeX entries
@@ -204,7 +204,7 @@ Only [extension.ts](src/extension.ts) and the modules in [src/ui/](src/ui/) impo
 
 Between folders, modules import a folder's `index.ts` through an alias, `#core` or `#ui` (`import { Swh } from '#core'`); within a folder, they import each other with relative paths. The aliases are Node's [subpath imports](https://nodejs.org/api/packages.html#subpath-imports), defined in the `imports` field of [package.json](package.json): each points TypeScript at the sources (`types`) and Node at the compiled files in `out/` (`default`), which is why [tsconfig.json](tsconfig.json) uses `"module": "node16"`. If `outDir` or the folders change, update both paths there. `Swh` is built in layers, each file's class extending the one below it: `known` → `origins` → `swhids` → `Swh`.
 
-SWHIDs are values of the [`Swhid`](src/core/swhid.ts) class, not strings: `Swhid.of(type, hash)` and `Swhid.parse(text)` are the only ways to make one, and both check it, so a `Swhid` is always valid. It is immutable: `qualify({ origin, visit, anchor, path, lines })` gives a new one. Two instances of the same SWHID are different objects, so compare them with `equals`, and key maps by `toString()`, the canonical text. SWHIDs become text only at the edges: the `ArchiveApi` port takes their text, as the Web API does, and so do the clipboard and the URLs. A SWHID the user typed, or found in a document, is passed on as written.
+SWHIDs are values of the [`Swhid`](src/core/swhid.ts) class, not strings: `Swhid.of(type, hash)` and `Swhid.parse(text)` are the only ways to make one, and both check it, so a `Swhid` is always valid. It is immutable: `qualify({ origin, visit, anchor, path, lines })` gives a new one. Its qualifiers are a value too, [`Qualifiers`](src/core/swhid.ts): `Qualifiers.of` keeps only those its context allows (an origin and its visit only when public, a path only with an anchor), and `Qualifiers.parse` checks each one. Two instances of the same SWHID are different objects, so compare them with `equals`, and key maps by `toString()`, the canonical text. SWHIDs become text only at the edges: the `ArchiveApi` port takes their text, as the Web API does, and so do the clipboard and the URLs. A SWHID the user typed, or found in a document, is passed on as written.
 
 `Swh` never talks HTTP itself: it asks the archive through the [`ArchiveApi`](src/core/backend/archiveApi.ts) interface, in its own terms (SWHIDs, origins, visits, save requests, citations). [`HttpArchiveApi`](src/core/backend/adapters/httpArchiveApi.ts) implements it over the archive's Web API, and [extension.ts](src/extension.ts) passes it to `Swh`; the tests can pass a fake archive instead. This is the "ports and adapters" (hexagonal) architecture: the interface is the port, its implementations in `adapters/` the adapters. To support another way of reaching the archive, implement `ArchiveApi`; nothing else changes.
 

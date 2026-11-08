@@ -12,7 +12,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Cancelled, isPublicOrigin, type Maybe, parseOrigin, type Swh, UserError } from '#core';
+import { Cancelled, isPublicOrigin, type LineRange, type Maybe, parseOrigin, type Swh, UserError } from '#core';
 import type { Reports } from '../reports';
 import { ask, currentRepoRoot, fileEditor, realCurrentDir, realpath, selectionLines, withoutContext } from '../helpers';
 
@@ -44,8 +44,8 @@ export type CommandInput = vscode.Uri | CommandOptions | undefined;
 export type Target = {
   /** The real path of the file or directory. */
   path: string;
-  /** The selected lines, `"A-B"` or `"A"`, for a file in the active editor. */
-  lines?: string;
+  /** The selected lines, for a file in the active editor. */
+  lines?: LineRange;
 };
 
 /**

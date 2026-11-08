@@ -10,7 +10,7 @@ import * as path from 'path';
 import { relativePath } from '../git';
 import { UserError } from '../errors';
 import { isPublicOrigin } from '../origin';
-import { Swhid } from '../swhid';
+import { type LineRange, Swhid } from '../swhid';
 import { uniq } from './memo';
 import { SwhOrigins } from './origins';
 import type { FileStatus, SwhidInfo } from './types';
@@ -271,7 +271,7 @@ export class SwhSwhids extends SwhOrigins {
    *
    * @param file - The real path.
    * @param root - The root of the repository holding it, if any.
-   * @param lines - The line range, `A-B` or `A`; dropped for an archived
+   * @param lines - The line range, if any; dropped for an archived
    * version that differs from the working tree's.
    * @param archivedVersion - Whether to identify the version the archive
    * holds rather than the working tree's; falls back to the working tree's
@@ -283,7 +283,7 @@ export class SwhSwhids extends SwhOrigins {
   private async directSwhid(
     file: string,
     root: Maybe<string>,
-    lines: Maybe<string>,
+    lines: Maybe<LineRange>,
     archivedVersion: boolean,
     worktree: () => Promise<Swhid>,
   ): Promise<SwhidInfo> {
@@ -324,18 +324,18 @@ export class SwhSwhids extends SwhOrigins {
    * {@link SwhidInfo.unchecked} says why.
    *
    * @param file - The real path of a file or directory.
-   * @param lines - The line range, `A-B` or `A`.
+   * @param lines - The line range, if any.
    * @param archivedVersion - Whether to identify the version the archive holds.
    * @returns The SWHID's details.
    * @throws {@link UserError} when even Git cannot tell the SWHID.
    *
    * @example
    * ```ts
-   * const info = await swh.qualifiedSwhid('/repo/src/a.ts', '3-5');
+   * const info = await swh.qualifiedSwhid('/repo/src/a.ts', LineRange.of(3, 5));
    * info.swhid; // 'swh:1:cnt:…;origin=https://github.com/o/r;visit=…;anchor=…;path=/src/a.ts;lines=3-5'
    * ```
    */
-  async qualifiedSwhid(file: string, lines?: string, archivedVersion = false): Promise<SwhidInfo> {
+  async qualifiedSwhid(file: string, lines?: LineRange, archivedVersion = false): Promise<SwhidInfo> {
     const root = await this.git.root(file);
     // computed once, whether the archive answers or not
     let swhid: Promise<Swhid> | undefined;

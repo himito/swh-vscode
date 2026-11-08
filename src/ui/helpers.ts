@@ -13,7 +13,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { type Git, lineRange, type Maybe, UserError } from '#core';
+import { type Git, LineRange, type Maybe, UserError } from '#core';
 
 /**
  * The extension's settings, the `swh.*` section of the configuration.
@@ -172,8 +172,8 @@ export function fileEditor(): Maybe<vscode.TextEditor> {
 }
 
 /**
- * The lines the editor's primary selection covers, in the form of the
- * `lines` qualifier of a SWHID.
+ * The lines the editor's primary selection covers, as the `lines` qualifier
+ * of a SWHID takes them.
  *
  * @remarks
  * Lines are numbered from 1. A selection that ends at the very start of a
@@ -181,18 +181,18 @@ export function fileEditor(): Maybe<vscode.TextEditor> {
  *
  * @example
  * ```ts
- * selectionLines(editor); // "2-3", or "5" for one line
+ * selectionLines(editor)?.toString(); // "2-3", or "5" for one line
  * ```
  *
  * @param editor - The editor whose selection to read.
- * @returns `"A-B"`, `"A"` for a single line, or `undefined` when the
+ * @returns The range of lines, or `undefined` when the
  * selection is empty.
  */
-export function selectionLines(editor: vscode.TextEditor): Maybe<string> {
+export function selectionLines(editor: vscode.TextEditor): Maybe<LineRange> {
   const { selection } = editor;
   if (selection.isEmpty) return undefined;
   const firstLine = selection.start.line + 1;
-  return lineRange(firstLine, lastSelectedLine(selection));
+  return LineRange.of(firstLine, lastSelectedLine(selection));
 }
 
 /**

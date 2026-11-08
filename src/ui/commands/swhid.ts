@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { bibtex, browseUrl, citationWhat, isPublicOrigin, type Maybe, normalizeOrigin, type SwhidInfo } from '#core';
+import { bibtex, browseUrl, citationWhat, isPublicOrigin, type LineRange, type Maybe, normalizeOrigin, type SwhidInfo } from '#core';
 import { archiveUrl, ask, busy, info, openUrl } from '../helpers';
 import type { ArchiveCommands } from './archive';
 import type { CommandInput, CommandContext, Target } from './context';
@@ -57,7 +57,7 @@ type SwhidResult = LabeledText & {
  * @param url - The archive's permalink.
  * @returns The link.
  */
-function markdownLink(targetPath: string, lines: Maybe<string>, url: string): string {
+function markdownLink(targetPath: string, lines: Maybe<LineRange>, url: string): string {
   const name = path.basename(targetPath);
   const text = lines ? `${name}, lines ${lines}` : name;
   return `[${text}](${url})`;

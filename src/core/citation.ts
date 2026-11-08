@@ -62,7 +62,8 @@ export function citation(answer: CitationAnswer, swhid: Swhid, title?: string, u
   const type = swhid.type === 'cnt' ? 'codefragment' : swhid.type === 'snp' ? 'software' : 'softwareversion';
   // as the archive makes it, e.g. swh-cnt-67c1849-L1-L3
   const lines = swhid.qualifiers.lines;
-  const key = `swh-${swhid.type}-${swhid.shortHash}${lines ? '-L' + lines.replace(/-/g, '-L') : ''}`;
+  const linesKey = !lines ? '' : lines.isSingle ? `-L${lines.first}` : `-L${lines.first}-L${lines.last}`;
+  const key = `swh-${swhid.type}-${swhid.shortHash}${linesKey}`;
   const body = fields
     .filter(([, value]) => value)
     .map(([field, value]) => `    ${field} = {${value}}`)
