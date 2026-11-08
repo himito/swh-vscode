@@ -237,7 +237,7 @@ test('scan model', () => {
   );
   assert.deepEqual(scan.root.children.map((i) => i.name), ['a.txt', 'sub/', 'z/']);
   assert.equal(scan.root.status, 'partial');
-  assert.deepEqual(scan.root.counts, [3, 1]);
+  assert.deepEqual(scan.root.counts, { files: 3, archived: 1 });
   assert.equal(scan.items[4].status, 'not-archived');
   assert.equal(
     scanSummary(scan),

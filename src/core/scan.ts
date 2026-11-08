@@ -22,6 +22,29 @@ import { ancestors } from './util';
  */
 export type ScanStatus = 'archived' | 'partial' | 'not-archived';
 
+/** How many files a directory holds, at any depth, and how many of them are archived. */
+export type FileCounts = {
+  /** The files under the directory. */
+  files: number;
+  /** Those of them the archive holds. */
+  archived: number;
+};
+
+/** The counts of a directory without files. */
+const NO_FILES: FileCounts = { files: 0, archived: 0 };
+
+/**
+ * The counts of a directory, with one more file.
+ *
+ * @param counts - The counts so far.
+ * @param archived - Whether the archive holds the file.
+ * @returns New counts; `counts` is left as it is.
+ */
+const withFile = (counts: FileCounts, archived: boolean): FileCounts => ({
+  files: counts.files + 1,
+  archived: counts.archived + (archived ? 1 : 0),
+});
+
 /** A file or directory of the scanned tree. */
 export type ScanItem = {
   /** The path relative to the repository root, with `/` separators; `"."` for the root. */
@@ -34,8 +57,8 @@ export type ScanItem = {
   dir: boolean;
   /** The item's archival status. */
   status: ScanStatus;
-  /** For a directory: `[files, archived files]` under it, at any depth. */
-  counts?: [number, number];
+  /** For a directory: the files under it, at any depth, and how many are archived. */
+  counts?: FileCounts;
   /** The directory holding the item; none for the root. */
   parent?: ScanItem;
   /** The items in the directory, in path order; empty for a file. */
@@ -107,20 +130,17 @@ function comparePaths(left: string, right: string): number {
  */
 export function buildScan(nodes: TreeNode[]): Scan {
   const sorted = [...nodes].sort((left, right) => comparePaths(left.path, right.path));
-  // directory path -> [files, archived] of the files under it
-  const counts = new Map<string, [number, number]>();
+  // directory path -> the files under it
+  const counts = new Map<string, FileCounts>();
   for (const node of sorted) {
     if (node.dir) continue;
-    for (const dir of ancestors(node.path)) {
-      const dirCounts = counts.get(dir) ?? [0, 0];
-      counts.set(dir, [dirCounts[0] + 1, dirCounts[1] + (node.archived ? 1 : 0)]);
-    }
+    for (const dir of ancestors(node.path)) counts.set(dir, withFile(counts.get(dir) ?? NO_FILES, node.archived));
   }
   const byPath = new Map<string, ScanItem>();
   const items: ScanItem[] = [];
   for (const node of sorted) {
-    const nodeCounts = counts.get(node.path) ?? [0, 0];
-    const status: ScanStatus = node.archived ? 'archived' : node.dir && nodeCounts[1] > 0 ? 'partial' : 'not-archived';
+    const nodeCounts = counts.get(node.path) ?? NO_FILES;
+    const status: ScanStatus = node.archived ? 'archived' : node.dir && nodeCounts.archived > 0 ? 'partial' : 'not-archived';
     const item: ScanItem = {
       path: node.path,
       name: node.path === '.' ? './' : node.path.split('/').pop()! + (node.dir ? '/' : ''),
@@ -139,12 +159,12 @@ export function buildScan(nodes: TreeNode[]): Scan {
   const root = byPath.get('.');
   if (!root) throw new Error('A scan needs the root directory, "."');
   const dirs = items.filter((item) => item.dir);
-  const all = counts.get('.') ?? [0, 0];
+  const all = counts.get('.') ?? NO_FILES;
   return {
     root,
     items,
-    files: all[0],
-    archivedFiles: all[1],
+    files: all.files,
+    archivedFiles: all.archived,
     dirs: dirs.length,
     archivedDirs: dirs.filter((dir) => dir.status === 'archived').length,
     partialDirs: dirs.filter((dir) => dir.status === 'partial').length,

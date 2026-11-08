@@ -82,8 +82,8 @@ function itemIcon(scanItem: ScanItem): vscode.ThemeIcon {
  */
 function itemDescription(scanItem: ScanItem): Maybe<string> {
   if (!scanItem.counts) return undefined;
-  const [total, archived] = scanItem.counts;
-  return `${archived}/${total}`;
+  const { files, archived } = scanItem.counts;
+  return `${archived}/${files}`;
 }
 
 /**

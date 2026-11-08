@@ -515,12 +515,17 @@ export class Qualifiers {
     const values: QualifierValues = {};
     for (const { key, value } of text.split(';').map(Qualifiers.split)) {
       if (!key) throw new UserError('Empty SWHID qualifier: two `;` in a row, or one at the end');
+
       if (!Qualifiers.isKey(key)) throw new UserError(`Unknown SWHID qualifier: ${key}`);
+
       // the text would keep only one of the values
       if (key in values) throw new UserError(`The ${key} qualifier is given twice`);
+
       if (!value) throw new UserError(`The ${key} qualifier has no value`);
+
       Qualifiers.parseInto(values, key, value);
     }
+
     return new Qualifiers(values);
   }
 
