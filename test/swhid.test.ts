@@ -1,5 +1,5 @@
 /**
- * Unit tests of the pure functions: SWHIDs, origins, citations and the scan model.
+ * Unit tests of the pure code: SWHIDs, origins, citations and the scan model.
  *
  * @remarks
  * These tests need neither VS Code, Git nor the network. Run them with
@@ -18,19 +18,19 @@ import {
   encodeOrigin,
   encodePath,
   findSwhids,
-  isSwhid,
   lineRange,
   normalizeOrigin,
   originCandidates,
   originName,
   parseOrigin,
   pathOrigin,
-  qualifiers,
-  qualify,
   scanSummary,
-  shortSwhid,
+  Swhid,
   UserError,
 } from '#core';
+
+/** A SHA-1 made of one hexadecimal digit, for readable test SWHIDs. */
+const sha = (digit: string) => digit.repeat(40);
 
 // Git remote URLs of every form become the URLs the archive knows origins by.
 test('normalizeOrigin', () => {
@@ -80,31 +80,54 @@ test('parseOrigin', () => {
 test('qualify encoding', () => {
   assert.equal(encodeOrigin('https://h/o r\tx\u00a0é'), 'https://h/o%20r%09x%C2%A0é');
   assert.equal(encodePath('/src/my file é;%.el'), '/src/my%20file%20%C3%A9%3B%25.el');
-  assert.equal(
-    qualify('swh:1:cnt:x', 'https://h/o r', null, 'swh:1:rev:y', 'src/my file é.el', null),
-    'swh:1:cnt:x;origin=https://h/o%20r;anchor=swh:1:rev:y;path=/src/my%20file%20%C3%A9.el',
-  );
-  assert.deepEqual(qualifiers('swh:1:cnt:x;origin=https://h/o%20r;path=/src/my%20file%20%C3%A9.el'), {
-    origin: 'https://h/o r',
-    path: '/src/my file é.el',
-  });
+  const cnt = Swhid.of('cnt', sha('c'));
+  const rev = Swhid.of('rev', sha('e'));
+  const qualified = cnt.qualify({ origin: 'https://h/o r', anchor: rev, path: '/src/my file é.el' });
+  assert.equal(qualified.toString(), `swh:1:cnt:${sha('c')};origin=https://h/o%20r;anchor=swh:1:rev:${sha('e')};path=/src/my%20file%20%C3%A9.el`);
+  assert.deepEqual(Swhid.parse(qualified.toString()).qualifiers, { origin: 'https://h/o r', anchor: rev, path: '/src/my file é.el' });
   // a character outside the BMP, left unescaped, survives decoding
-  assert.deepEqual(qualifiers('swh:1:cnt:x;origin=https://h/\u{1F600}%20r'), { origin: 'https://h/\u{1F600} r' });
-  // the root, lines, a snapshot; a private origin is left out
-  assert.equal(
-    qualify('swh:1:dir:d', 'https://h/r', 'aa', 'swh:1:rev:y', '.', '3-4'),
-    'swh:1:dir:d;origin=https://h/r;visit=swh:1:snp:aa;anchor=swh:1:rev:y;path=/;lines=3-4',
-  );
-  assert.equal(qualify('swh:1:cnt:x', '/srv/repo', 'aa', null, 'f', '2'), 'swh:1:cnt:x;lines=2');
+  assert.equal(Swhid.parse(`swh:1:cnt:${sha('c')};origin=https://h/\u{1F600}%20r`).qualifiers.origin, 'https://h/\u{1F600} r');
+  // the root, lines, a snapshot
+  const dir = Swhid.of('dir', sha('d')).qualify({ origin: 'https://h/r', visit: Swhid.of('snp', sha('a')), anchor: rev, path: '/', lines: '3-4' });
+  assert.equal(dir.toString(), `swh:1:dir:${sha('d')};origin=https://h/r;visit=swh:1:snp:${sha('a')};anchor=swh:1:rev:${sha('e')};path=/;lines=3-4`);
+  // a private origin and its visit are left out, a path without an anchor too
+  assert.equal(cnt.qualify({ origin: '/srv/repo', visit: Swhid.of('snp', sha('a')), path: '/f', lines: '2' }).toString(), `swh:1:cnt:${sha('c')};lines=2`);
   assert.equal(pathOrigin('https://h/a b?c#d'), 'https://h/a%20b%3Fc%23d');
 });
 
-// Path ancestors and shortened SWHIDs.
+// A SWHID is a value: made checked, parsed back to an equal one, qualified
+// into a new one, and shown shortened.
+test('Swhid value', () => {
+  const hash = '0123456789abcdef0123456789abcdef01234567';
+  const cnt = Swhid.of('cnt', hash);
+  assert.equal(cnt.type, 'cnt');
+  assert.equal(cnt.hash, hash);
+  assert.equal(cnt.shortHash, '0123456');
+  assert.equal(JSON.stringify({ cnt }), `{"cnt":"swh:1:cnt:${hash}"}`);
+  assert.throws(() => Swhid.of('cnt', 'abc'), UserError);
+  assert.throws(() => Swhid.of('cnt', 'a'.repeat(64)), /SHA-256/);
+
+  const lines = cnt.qualify({ lines: '1' });
+  assert.equal(lines.toShortString(), 'swh:1:cnt:0123456789;lines=1');
+  assert.ok(lines.core.equals(cnt));
+  assert.ok(!lines.equals(cnt));
+  assert.ok(Swhid.parse(lines.toString()).equals(lines));
+  // qualifying replaces the qualifiers, and leaves the original alone
+  assert.equal(lines.qualify({}).toString(), cnt.toString());
+  assert.deepEqual(lines.qualifiers, { lines: '1' });
+
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};bytes=1`), /Unknown SWHID qualifier/);
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};lines=0-2`), /Not a line range/);
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};visit=swh:1:rev:${hash}`), /A visit is a snapshot/);
+  assert.throws(() => Swhid.parse(`swh:1:cnt:${hash};anchor=swh:1:cnt:${hash}`), /An anchor holds objects/);
+  assert.equal(Swhid.tryParse('swh:1:cnt:0123'), undefined);
+});
+
+// Path ancestors and origin names.
 test('helpers', () => {
   assert.deepEqual(ancestors('.'), []);
   assert.deepEqual(ancestors('a.txt'), ['.']);
   assert.deepEqual(ancestors('a/b/c.txt'), ['.', 'a', 'a/b']);
-  assert.equal(shortSwhid('swh:1:cnt:0123456789abcdef0123456789abcdef01234567;lines=1'), 'swh:1:cnt:0123456789;lines=1');
   assert.equal(originName('https://github.com/bzg/swh.el'), 'swh.el');
   assert.equal(originName('https://gitlab.com/a/repo.git/'), 'repo');
   assert.equal(originName('C:\\Users\\me\\repo.git'), 'repo');
@@ -116,17 +139,17 @@ test('lineRange', () => {
   assert.equal(lineRange(1, 120), '1-120');
 });
 
-test('isSwhid', () => {
+test('Swhid.isValid', () => {
   const hash = '0123456789abcdef0123456789abcdef01234567';
-  for (const type of ['cnt', 'dir', 'rev', 'rel', 'snp']) assert.ok(isSwhid(`swh:1:${type}:${hash}`), type);
-  assert.ok(!isSwhid(`swh:1:ori:${hash}`));
-  assert.ok(isSwhid(`swh:1:cnt:${hash};origin=https://example.org/me/repo;lines=1-2`));
-  assert.ok(!isSwhid(''));
-  assert.ok(!isSwhid('swh:1:cnt:0123'));
-  assert.ok(!isSwhid(`swh:1:xyz:${hash}`));
-  assert.ok(!isSwhid(`swh:2:cnt:${hash}`));
-  assert.ok(!isSwhid(`swh:1:cnt:${hash.toUpperCase()}`));
-  assert.ok(!isSwhid(` swh:1:cnt:${hash}`));
+  for (const type of ['cnt', 'dir', 'rev', 'rel', 'snp']) assert.ok(Swhid.isValid(`swh:1:${type}:${hash}`), type);
+  assert.ok(!Swhid.isValid(`swh:1:ori:${hash}`));
+  assert.ok(Swhid.isValid(`swh:1:cnt:${hash};origin=https://example.org/me/repo;lines=1-2`));
+  assert.ok(!Swhid.isValid(''));
+  assert.ok(!Swhid.isValid('swh:1:cnt:0123'));
+  assert.ok(!Swhid.isValid(`swh:1:xyz:${hash}`));
+  assert.ok(!Swhid.isValid(`swh:2:cnt:${hash}`));
+  assert.ok(!Swhid.isValid(`swh:1:cnt:${hash.toUpperCase()}`));
+  assert.ok(!Swhid.isValid(` swh:1:cnt:${hash}`));
 });
 
 // SWHIDs are found in text with their qualifiers but without trailing
@@ -143,27 +166,29 @@ test('findSwhids', () => {
 // Minimal BibTeX entries: type and key by object type, optional fields left
 // out, and the archive's own entry passed through as is.
 test('citation', () => {
-  const swhid = 'swh:1:cnt:94a9ed024d3859793618152ea559a168bbcbb5e2;origin=https://example.org/me/repo';
-  assert.deepEqual(citation('no-metadata', 'swh:1:cnt:94a9ed024d3859793618152ea559a168bbcbb5e2', swhid, 'repo', 'https://example.org/me/repo'), [
+  const cnt = Swhid.of('cnt', '94a9ed024d3859793618152ea559a168bbcbb5e2');
+  const swhid = cnt.qualify({ origin: 'https://example.org/me/repo' });
+  assert.deepEqual(citation('no-metadata', swhid, 'repo', 'https://example.org/me/repo'), [
     '@codefragment{swh-cnt-94a9ed0,\n    title = {repo},\n    url = {https://example.org/me/repo},\n    swhid = {' + swhid + '}\n}\n',
     'no-metadata',
   ]);
-  const [entry] = citation('failed', 'swh:1:snp:0000000000', 's', 'repo', undefined, '2026-07-01T10:00:00Z', undefined);
-  assert.equal(entry, '@software{swh-snp-0000000,\n    title = {repo},\n    date = {2026-07-01},\n    year = {2026},\n    swhid = {s}\n}\n');
-  assert.equal(citation('failed', 'swh:1:cnt:94a9ed0aa', 's', undefined, undefined, undefined, '2-3')[0].split(',')[0], '@codefragment{swh-cnt-94a9ed0-L2-L3');
-  assert.equal(citation('failed', 'swh:1:dir:94a9ed0aa', 's')[0].split('{')[0], '@softwareversion');
-  assert.deepEqual(citation({ entry: '@x{}' }, 'swh:1:cnt:a', 's'), ['@x{}', 'archive']);
+  const snp = Swhid.of('snp', sha('0'));
+  const [entry] = citation('failed', snp, 'repo', undefined, '2026-07-01T10:00:00Z');
+  assert.equal(entry, `@software{swh-snp-0000000,\n    title = {repo},\n    date = {2026-07-01},\n    year = {2026},\n    swhid = {${snp}}\n}\n`);
+  assert.equal(citation('failed', cnt.qualify({ lines: '2-3' }))[0].split(',')[0], '@codefragment{swh-cnt-94a9ed0-L2-L3');
+  assert.equal(citation('failed', Swhid.of('dir', sha('9')))[0].split('{')[0], '@softwareversion');
+  assert.deepEqual(citation({ entry: '@x{}' }, cnt), ['@x{}', 'archive']);
 });
 
 // The scan tree: path order, parent links, per-directory counts, statuses and summary.
 test('scan model', () => {
   const scan = buildScan([
-    { path: 'sub/b.txt', swhid: 'swh:1:cnt:b', dir: false, archived: true },
-    { path: '.', swhid: 'swh:1:dir:r', dir: true, archived: false },
-    { path: 'a.txt', swhid: 'swh:1:cnt:a', dir: false, archived: false },
-    { path: 'sub', swhid: 'swh:1:dir:s', dir: true, archived: true },
-    { path: 'z', swhid: 'swh:1:dir:z', dir: true, archived: false },
-    { path: 'z/c.txt', swhid: 'swh:1:cnt:c', dir: false, archived: false },
+    { path: 'sub/b.txt', swhid: Swhid.of('cnt', sha('b')), dir: false, archived: true },
+    { path: '.', swhid: Swhid.of('dir', sha('0')), dir: true, archived: false },
+    { path: 'a.txt', swhid: Swhid.of('cnt', sha('a')), dir: false, archived: false },
+    { path: 'sub', swhid: Swhid.of('dir', sha('1')), dir: true, archived: true },
+    { path: 'z', swhid: Swhid.of('dir', sha('2')), dir: true, archived: false },
+    { path: 'z/c.txt', swhid: Swhid.of('cnt', sha('c')), dir: false, archived: false },
   ]);
   assert.deepEqual(
     scan.items.map((i) => i.path),

@@ -19,6 +19,8 @@ test('toVisit keeps the fields of a well-formed visit', () => {
 
 test('toVisit leaves out a snapshot that is not a string', () => {
   assert.deepEqual(toVisit({ date: '2024-01-02', status: 'failed', snapshot: null }), { date: '2024-01-02', status: 'failed' });
+  // nor a SHA-1: a SWHID could not be made of it
+  assert.deepEqual(toVisit({ date: '2024-01-02', status: 'full', snapshot: 'abc' }), { date: '2024-01-02', status: 'full' });
   assert.deepEqual(toVisit({ date: '2024-01-02', status: 'failed' }), { date: '2024-01-02', status: 'failed' });
 });
 

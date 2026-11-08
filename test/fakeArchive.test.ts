@@ -12,7 +12,7 @@
 
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { type ArchiveApi, type CitationTarget, Git, type LatestVisit, type SaveRequest, Swh, UserError, type Visit } from '#core';
+import { type ArchiveApi, type CitationTarget, Git, type LatestVisit, type SaveRequest, Swh, Swhid, UserError, type Visit } from '#core';
 
 /** A fake archive in memory, which records what it is asked. */
 class FakeArchive implements ArchiveApi {
@@ -74,30 +74,35 @@ class FakeArchive implements ArchiveApi {
  */
 const swhOn = (archive: ArchiveApi) => new Swh({ git: new Git(), archive });
 
+/** Two content SWHIDs, and their texts as the archive is asked about them. */
+const A = Swhid.of('cnt', 'a'.repeat(40));
+const B = Swhid.of('cnt', 'b'.repeat(40));
+const [a, b] = [A.toString(), B.toString()];
+
 test('known SWHIDs are asked once, and remembered', async () => {
-  const archive = new FakeArchive(new Set(['swh:1:cnt:a']));
+  const archive = new FakeArchive(new Set([a]));
   const s = swhOn(archive);
-  await s.rememberKnown(['swh:1:cnt:a', 'swh:1:cnt:b', 'swh:1:cnt:a']);
-  assert.deepEqual(archive.knownCalls, [['swh:1:cnt:a', 'swh:1:cnt:b']]);
-  assert.equal(s.knownP('swh:1:cnt:a'), true);
-  assert.equal(s.knownP('swh:1:cnt:b'), false);
+  await s.rememberKnown([A, B, A]);
+  assert.deepEqual(archive.knownCalls, [[a, b]]);
+  assert.equal(s.knownP(A), true);
+  assert.equal(s.knownP(B), false);
 
   // remembered: not asked again
-  assert.equal(await s.archivedP('swh:1:cnt:a'), true);
+  assert.equal(await s.archivedP(A), true);
   assert.equal(archive.knownCalls.length, 1);
 
   // a refresh forgets what is not held, not what is
   s.refresh();
-  await s.rememberKnown(['swh:1:cnt:a', 'swh:1:cnt:b']);
-  assert.deepEqual(archive.knownCalls[1], ['swh:1:cnt:b']);
+  await s.rememberKnown([A, B]);
+  assert.deepEqual(archive.knownCalls[1], [b]);
 });
 
 test('an answer from before a refresh is not remembered', async () => {
-  const archive = new FakeArchive(new Set(['swh:1:cnt:a']));
+  const archive = new FakeArchive(new Set([a]));
   const s = swhOn(archive);
   archive.duringKnown = () => s.refresh();
-  await s.rememberKnown(['swh:1:cnt:a']);
-  assert.equal(s.knownP('swh:1:cnt:a'), false);
+  await s.rememberKnown([A]);
+  assert.equal(s.knownP(A), false);
 });
 
 test("an origin's status tries its candidates in order", async () => {
@@ -114,12 +119,12 @@ test("an origin's status tries its candidates in order", async () => {
 test('a save request forgets what it changes, even when it fails', async () => {
   const archive = new FakeArchive(new Set(), new Map());
   const s = swhOn(archive);
-  await s.rememberKnown(['swh:1:cnt:b']);
+  await s.rememberKnown([B]);
   archive.saveAnswer = () => {
     throw new UserError('refused');
   };
   await assert.rejects(s.saveOrigin('https://example.org/me/repo'), /refused/);
   // the negative answer is forgotten: asked again
-  await s.rememberKnown(['swh:1:cnt:b']);
+  await s.rememberKnown([B]);
   assert.equal(archive.knownCalls.length, 2);
 });

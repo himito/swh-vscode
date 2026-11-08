@@ -31,8 +31,9 @@ export class CitationCommands {
    * Implements `swh.cite` and, with `askOrigin`, `swh.citeOther`. The archive
    * makes the entry from the repository's `codemeta.json` or `CITATION.cff`;
    * without them, or when the target is not archived, a minimal entry is
-   * made. With no file or folder to cite, asks for a repository and cites
-   * its latest snapshot.
+   * made. With no file open and no file or folder given, cites the current
+   * directory when its repository has a public origin; otherwise asks for a
+   * repository and cites its latest snapshot.
    *
    * @param askOrigin - Whether to ask for another repository's URL; `false` by default.
    * @param input - What the command was run with: the file or folder to cite, if any.

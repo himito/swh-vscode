@@ -1,5 +1,5 @@
 /**
- * SWHIDs, origins and their encodings.
+ * SWHIDs, as the {@link Swhid} value object.
  *
  * @remarks
  * A SWHID (SoftWare Hash IDentifier, https://www.swhid.org) names an
@@ -7,13 +7,15 @@
  * "core" SWHID, optionally followed by `;key=value` qualifiers that give
  * its context (origin, visit, anchor, path, lines).
  *
- * Every function here is pure: no I/O, no Git, no network. This module must
+ * Everything here is pure: no I/O, no Git, no network. This module must
  * not import `vscode`, so that the unit tests can run it with Node alone.
  *
  * @packageDocumentation
  */
 
+import { baseUrl, hexify, unhex } from './encoding';
 import { UserError } from './errors';
+import { encodeOrigin, isPublicOrigin } from './origin';
 import type { Maybe } from './types';
 
 /**
@@ -25,320 +27,31 @@ import type { Maybe } from './types';
  */
 export type ObjectType = 'cnt' | 'dir' | 'rev' | 'rel' | 'snp';
 
-/**
- * Builds the core SWHID of an object from its Git hash.
- *
- * @param type - The object type.
- * @param hash - The object's SHA-1, in hexadecimal.
- * @returns The core SWHID, `swh:1:<type>:<hash>`.
- * @throws {@link UserError} when `hash` is longer than a SHA-1: the
- * repository uses SHA-256, which SWHIDs do not support.
- *
- * @example
- * ```ts
- * core('cnt', '94a9ed024d3859793618152ea559a168bbcbb5e2');
- * // 'swh:1:cnt:94a9ed024d3859793618152ea559a168bbcbb5e2'
- * ```
- */
-export function core(type: ObjectType, hash: string): string {
-  if (hash.length > 40) {
-    throw new UserError('SWHIDs are SHA-1 based: this repository uses SHA-256');
-  }
-  return `swh:1:${type}:${hash}`;
-}
+/** The context qualifiers of a SWHID, their values decoded. */
+export type Qualifiers = {
+  /** The URL of the origin the object was found in. */
+  origin?: string;
+  /** The snapshot of the origin's visit the object was found in. */
+  visit?: Swhid;
+  /** The commit, release, directory or snapshot that holds the object. */
+  anchor?: Swhid;
+  /** The object's path from the anchor's root directory, starting with `/`. */
+  path?: string;
+  /** A range of lines of a content, `"A-B"` or `"A"`, see {@link lineRange}. */
+  lines?: string;
+};
 
-/**
- * Gives the object type of a SWHID.
- *
- * @param swhid - A core or qualified SWHID.
- * @returns Its object type, e.g. `"cnt"`.
- */
-export const typeOf = (swhid: string) => swhid.substring(6, 9);
+/** A SHA-1 in hexadecimal, as Git writes it. */
+const SHA1 = /^[0-9a-f]{40}$/;
 
-/**
- * Gives the hash of a core SWHID.
- *
- * @param swhid - A core SWHID: with qualifiers, they would be included.
- * @returns Its 40-digit hexadecimal hash.
- */
-export const hashOf = (swhid: string) => swhid.substring(10);
+/** The text of a SWHID, core or qualified, its qualifiers not checked. */
+const SWHID_SYNTAX = /^swh:1:(cnt|dir|rev|rel|snp):([0-9a-f]{40})(;.*)?$/;
 
-/**
- * Gives the first seven digits of the hash of a SWHID, as Git abbreviates commits.
- *
- * @param swhid - A core or qualified SWHID.
- * @returns The first seven hexadecimal digits of its hash.
- */
-export const shortHash = (swhid: string) => swhid.substring(10, 17);
+/** The text of a SWHID within other text; see {@link findSwhids}. */
+const SWHID_IN_TEXT = /swh:1:(?:cnt|dir|rev|rel|snp):[0-9a-f]{40}(?:;[^\s"'`<>()[\]{}]*)?/g;
 
-/**
- * Shortens the hash of a SWHID to its first ten digits, for messages.
- *
- * @param swhid - A core or qualified SWHID; its qualifiers are kept.
- * @returns The SWHID with a ten-digit hash.
- *
- * @example
- * ```ts
- * shortSwhid('swh:1:cnt:0123456789abcdef0123456789abcdef01234567;lines=1');
- * // 'swh:1:cnt:0123456789;lines=1'
- * ```
- */
-export function shortSwhid(swhid: string): string {
-  return swhid.replace(/^(swh:1:[a-z]{3}:[0-9a-f]{10})[0-9a-f]*/, '$1');
-}
-
-/** A SWHID, core or qualified: `swh:1:<type>:<sha1>`, then `;`-separated qualifiers, if any. */
-const SWHID_PATTERN = /^swh:1:(cnt|dir|rev|rel|snp):[0-9a-f]{40}(;.*)?$/;
-
-/**
- * Tells whether a text is a SWHID, with or without qualifiers.
- *
- * @param text - The text, e.g. as the user typed it.
- * @returns `true` for a SWHID.
- *
- * @example
- * ```ts
- * isSwhid('swh:1:cnt:0123456789abcdef0123456789abcdef01234567;lines=1'); // true
- * isSwhid('swh:1:cnt:0123'); // false
- * ```
- */
-export function isSwhid(text: string): boolean {
-  return SWHID_PATTERN.test(text);
-}
-
-/**
- * Removes the trailing slashes of a base URL setting.
- *
- * @param url - A base URL, such as the `swh.archiveUrl` setting.
- * @returns `url` without its trailing slashes.
- */
-export const baseUrl = (url: string) => url.replace(/\/+$/, '');
-
-/**
- * Gives the URL of a SWHID in the archive's web interface.
- *
- * @param archiveUrl - The archive's web root, e.g. `https://archive.softwareheritage.org`.
- * @param swhid - A core or qualified SWHID, inserted as is.
- * @returns The URL where the archive shows the SWHID.
- */
-export const browseUrl = (archiveUrl: string, swhid: string) => `${baseUrl(archiveUrl)}/${swhid}`;
-
-/** The characters that URLs never need to percent-encode (RFC 3986 "unreserved"). */
-const UNRESERVED = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~';
-
-/**
- * Percent-encodes a string, as UTF-8, except for the unreserved characters
- * and the `allowed` ones.
- *
- * @param str - The string to encode.
- * @param allowed - Further characters to leave as they are.
- * @returns `str` with every other character encoded as `%XX` (uppercase hexadecimal).
- *
- * @example
- * ```ts
- * hexify('/src/my file é;%.el', '/');
- * // '/src/my%20file%20%C3%A9%3B%25.el'
- * ```
- */
-export function hexify(str: string, allowed = ''): string {
-  const ok = new Set(UNRESERVED + allowed);
-  let out = '';
-  for (const char of str) {
-    if (ok.has(char)) {
-      out += char;
-    } else {
-      for (const byte of Buffer.from(char, 'utf8')) {
-        out += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
-      }
-    }
-  }
-  return out;
-}
-
-/**
- * Decodes the `%XX` sequences of a string, as UTF-8.
- *
- * @remarks
- * Unlike `decodeURIComponent`, it never throws: a `%` that does not start a
- * valid sequence is kept as is.
- *
- * @param str - The percent-encoded string.
- * @returns The decoded string.
- */
-export function unhex(str: string): string {
-  const bytes: number[] = [];
-  for (let index = 0; index < str.length; ) {
-    const escape = /^%([0-9a-fA-F]{2})/.exec(str.substring(index, index + 3));
-    if (escape) {
-      bytes.push(parseInt(escape[1], 16));
-      index += 3;
-    } else {
-      // a whole code point: a lone half of a surrogate pair would not encode
-      const char = String.fromCodePoint(str.codePointAt(index)!);
-      bytes.push(...Buffer.from(char, 'utf8'));
-      index += char.length;
-    }
-  }
-  return Buffer.from(bytes).toString('utf8');
-}
-
-/**
- * Builds a URL query string, its keys and values percent-encoded.
- *
- * @param params - `[key, value]` pairs, or `[key]` for a key without a value.
- * @returns The query string, without the leading `?`.
- *
- * @example
- * ```ts
- * queryString([['path', '/a b'], ['upstream']]);
- * // 'path=%2Fa%20b&upstream'
- * ```
- */
-export function queryString(params: Array<[string, string?]>): string {
-  return params.map(([key, value]) => (value === undefined ? hexify(key) : `${hexify(key)}=${hexify(value)}`)).join('&');
-}
-
-/**
- * Converts a Git remote URL into the origin URL the archive knows it by.
- *
- * @remarks
- * The user name, the trailing slashes and the `.git` suffix are removed, and
- * the host is lowercased. `ssh://`, `git://` and scp-like `git@host:path`
- * URLs become `https://` ones, without their port, which is not the web
- * one. Local paths (including Windows drive paths) and `file://` URLs are
- * returned as they are: they are not public origins.
- *
- * @param url - A Git remote URL.
- * @returns The origin URL.
- *
- * @example
- * ```ts
- * normalizeOrigin('git@github.com:bzg/swh.el.git');     // 'https://github.com/bzg/swh.el'
- * normalizeOrigin('ssh://git@github.com:22/bzg/x.git'); // 'https://github.com/bzg/x'
- * normalizeOrigin('/srv/git/repo');                      // '/srv/git/repo'
- * ```
- */
-export function normalizeOrigin(url: string): string {
-  const strip = (candidate: string) => candidate.replace(/\/+$/, '').replace(/\.git$/i, '');
-  let match = /^(https?|ssh|git|git\+ssh|ssh\+git):\/\/(?:[^@/]+@)?([^/:@]+)(:[0-9]+)?(\/.*)$/i.exec(url);
-  if (match) {
-    // ssh:// and git:// become https; their port is not the web one
-    const scheme = match[1].toLowerCase();
-    const convert = scheme !== 'http' && scheme !== 'https';
-    return strip(`${convert ? 'https' : scheme}://${match[2].toLowerCase()}${convert ? '' : match[3] ?? ''}${match[4]}`);
-  }
-  if (!/^[a-z]:[/\\]/i.test(url)) {
-    match = /^(?:[^@/:]+@)?([^@/:]+):([^:]+)$/.exec(url);
-    if (match && !match[2].startsWith('//')) {
-      return strip(`https://${match[1].toLowerCase()}/${match[2].replace(/^\/+/, '')}`);
-    }
-  }
-  return url;
-}
-
-/**
- * Tells whether an origin is a public URL that Software Heritage can fetch.
- *
- * @param origin - An origin URL, as {@link normalizeOrigin} gives it, or nothing.
- * @returns `true` for an `http://` or `https://` URL.
- */
-export const isPublicOrigin = (origin: string | undefined | null): origin is string =>
-  !!origin && /^https?:\/\//i.test(origin);
-
-/** A host name followed by a path, without a scheme: `github.com/owner/repo`. */
-const SCHEMELESS_URL = /^[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)+\//u;
-
-/** Characters no repository URL holds: blanks (a typo), a query or a fragment (a web page). */
-const NON_REPOSITORY_CHARS = /[\s?#]/;
-
-/**
- * Parses a repository URL typed by the user into an origin.
- *
- * @remarks
- * Surrounding blanks are ignored, and a URL without a scheme gets `https://`.
- * The URL is then normalized as the archive names origins (see
- * {@link normalizeOrigin}).
- *
- * @param input - What the user typed.
- * @returns The normalized origin.
- * @throws {@link UserError} when the input is empty, looks like a web page
- * rather than a repository, or is not a public URL.
- *
- * @example
- * ```ts
- * parseOrigin(' github.com/bzg/swh.el ');     // 'https://github.com/bzg/swh.el'
- * parseOrigin('git@github.com:bzg/swh.el');   // 'https://github.com/bzg/swh.el'
- * parseOrigin('https://github.com/bzg?tab=1'); // throws
- * ```
- */
-export function parseOrigin(input: string): string {
-  const url = input.trim();
-  if (!url) throw new UserError('No origin');
-  if (NON_REPOSITORY_CHARS.test(url)) throw new UserError(`Not a repository URL: ${url}`);
-
-  const origin = normalizeOrigin(SCHEMELESS_URL.test(url) ? `https://${url}` : url);
-  if (!isPublicOrigin(origin)) throw new UserError(`Not a public repository URL: ${url}`);
-  return origin;
-}
-
-/**
- * Gives the origin URLs to look up in the archive for a remote URL.
- *
- * @remarks
- * The archive may know a repository with or without its `.git` suffix, so a
- * public origin has two candidates, tried in order.
- *
- * @param url - A Git remote URL.
- * @returns The normalized origin, then the same with `.git`; only the
- * normalized one when it is not public.
- *
- * @example
- * ```ts
- * originCandidates('git@h.org:a/b'); // ['https://h.org/a/b', 'https://h.org/a/b.git']
- * originCandidates('/srv/repo');     // ['/srv/repo']
- * ```
- */
-export function originCandidates(url: string): string[] {
-  const normalized = normalizeOrigin(url);
-  return isPublicOrigin(normalized) ? [normalized, normalized + '.git'] : [normalized];
-}
-
-/**
- * Encodes an origin URL for use as a segment of a Web API path.
- *
- * @remarks
- * Every character but the unreserved ones and the path characters
- * (`/:@!$&'()*+,;=`) is percent-encoded: a remote URL may hold `?`, `#`,
- * blanks or non-ASCII characters.
- *
- * @param origin - An origin URL.
- * @returns The encoded origin.
- *
- * @example
- * ```ts
- * pathOrigin('https://h/a b?c#d'); // 'https://h/a%20b%3Fc%23d'
- * ```
- */
-export const pathOrigin = (origin: string) => hexify(origin, "/:@!$&'()*+,;=");
-
-/**
- * Encodes an origin URL as the value of an `origin` qualifier.
- *
- * @remarks
- * Only `%`, `;` (the qualifier separator), blanks and control characters
- * are escaped, as swh.model and swhid-clj do.
- *
- * @param origin - An origin URL.
- * @returns The qualifier value.
- *
- * @example
- * ```ts
- * encodeOrigin('https://h/o r\tx\u00a0é'); // 'https://h/o%20r%09x%C2%A0é'
- * ```
- */
-export function encodeOrigin(origin: string): string {
-  return origin.replace(/[%;\p{Zs}\p{Zl}\p{Zp}\p{Cc}]/gu, (char) => hexify(char));
-}
+/** A line range qualifier: a line, or two separated by `-`, numbered from 1. */
+const LINES = /^[1-9][0-9]*(-[1-9][0-9]*)?$/;
 
 /**
  * Encodes a path as the value of a `path` qualifier, as swh.model and
@@ -348,6 +61,259 @@ export function encodeOrigin(origin: string): string {
  * @returns The path with every character but `/` and the unreserved ones percent-encoded.
  */
 export const encodePath = (path: string) => hexify(path, '/');
+
+/**
+ * A SWHID: an immutable value, core or qualified.
+ *
+ * @remarks
+ * Instances are made only by {@link Swhid.of} and {@link Swhid.parse}, which
+ * check them: a `Swhid` is always valid. Qualifying one gives a new one.
+ *
+ * Two instances of the same SWHID are different objects: compare them with
+ * {@link Swhid.equals}, and key maps by {@link Swhid.toString}, the
+ * canonical text.
+ *
+ * @example
+ * ```ts
+ * const file = Swhid.of('cnt', '94a9ed024d3859793618152ea559a168bbcbb5e2');
+ * file.qualify({ lines: '3-5' }).toString();
+ * // 'swh:1:cnt:94a9ed024d3859793618152ea559a168bbcbb5e2;lines=3-5'
+ * ```
+ */
+export class Swhid {
+  /** The canonical text, computed once. */
+  private readonly text: string;
+
+  /**
+   * Makes a SWHID from parts already checked.
+   *
+   * @param type - The object type.
+   * @param hash - The object's SHA-1, in hexadecimal.
+   * @param qualifiers - The qualifiers, already filtered; those `undefined` are dropped.
+   */
+  private constructor(
+    readonly type: ObjectType,
+    readonly hash: string,
+    readonly qualifiers: Readonly<Qualifiers> = {},
+  ) {
+    const given = Object.entries(qualifiers).filter(([, value]) => value !== undefined);
+    this.qualifiers = Object.freeze(Object.fromEntries(given) as Qualifiers);
+    this.text = `swh:1:${type}:${hash}${encodeQualifiers(this.qualifiers)}`;
+  }
+
+  /**
+   * The core SWHID of an object, from its Git hash.
+   *
+   * @param type - The object type.
+   * @param hash - The object's SHA-1, in hexadecimal.
+   * @returns The core SWHID, `swh:1:<type>:<hash>`.
+   * @throws {@link UserError} when `hash` is longer than a SHA-1 (the
+   * repository uses SHA-256, which SWHIDs do not support), or is not a SHA-1.
+   *
+   * @example
+   * ```ts
+   * Swhid.of('cnt', '94a9ed024d3859793618152ea559a168bbcbb5e2').toString();
+   * // 'swh:1:cnt:94a9ed024d3859793618152ea559a168bbcbb5e2'
+   * ```
+   */
+  static of(type: ObjectType, hash: string): Swhid {
+    if (hash.length > 40) throw new UserError('SWHIDs are SHA-1 based: this repository uses SHA-256');
+    if (!SHA1.test(hash)) throw new UserError(`Not a SHA-1: ${hash}`);
+    return new Swhid(type, hash);
+  }
+
+  /**
+   * Parses the text of a SWHID, core or qualified.
+   *
+   * @param text - The SWHID's text, e.g. as the user typed it.
+   * @returns The SWHID, its qualifier values decoded.
+   * @throws {@link UserError} when `text` is not a SWHID, or holds an
+   * unknown or malformed qualifier: e.g. a visit that is not a snapshot, or
+   * an anchor that is a content.
+   *
+   * @example
+   * ```ts
+   * Swhid.parse('swh:1:cnt:94a9…;origin=https://h/o%20r;lines=2').qualifiers;
+   * // { origin: 'https://h/o r', lines: '2' }
+   * ```
+   */
+  static parse(text: string): Swhid {
+    const match = SWHID_SYNTAX.exec(text);
+    if (!match) throw new UserError(`Not a SWHID: ${text}`);
+    const qualifiers = match[3] ? parseQualifiers(match[3].substring(1)) : {};
+    return new Swhid(match[1] as ObjectType, match[2], qualifiers);
+  }
+
+  /**
+   * Like {@link Swhid.parse}, but `undefined` rather than an error.
+   *
+   * @param text - The SWHID's text.
+   * @returns The SWHID, or `undefined` when `text` is not a valid one.
+   */
+  static tryParse(text: string): Maybe<Swhid> {
+    try {
+      return Swhid.parse(text);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Tells whether a text has the syntax of a SWHID, with or without qualifiers.
+   *
+   * @remarks
+   * The qualifiers are not checked: this is for text the user types, which
+   * is then passed on to the archive as is.
+   *
+   * @param text - The text.
+   * @returns `true` for a SWHID.
+   *
+   * @example
+   * ```ts
+   * Swhid.isValid('swh:1:cnt:0123456789abcdef0123456789abcdef01234567;lines=1'); // true
+   * Swhid.isValid('swh:1:cnt:0123'); // false
+   * ```
+   */
+  static isValid(text: string): boolean {
+    return SWHID_SYNTAX.test(text);
+  }
+
+  /** The core SWHID: this one without its qualifiers. */
+  get core(): Swhid {
+    return Object.keys(this.qualifiers).length ? new Swhid(this.type, this.hash) : this;
+  }
+
+  /** The first seven digits of the hash, as Git abbreviates commits. */
+  get shortHash(): string {
+    return this.hash.substring(0, 7);
+  }
+
+  /**
+   * The core SWHID qualified with a context, its previous qualifiers dropped.
+   *
+   * @remarks
+   * The `origin` and `visit` qualifiers are kept only for a public origin,
+   * and `path` only with an `anchor`, which it is relative to.
+   *
+   * @param context - The qualifiers; missing ones are left out.
+   * @returns The qualified SWHID.
+   *
+   * @example
+   * ```ts
+   * dir.qualify({ origin: 'https://h/r', visit: snp, anchor: rev, path: '/', lines: '3-4' }).toString();
+   * // 'swh:1:dir:…;origin=https://h/r;visit=swh:1:snp:…;anchor=swh:1:rev:…;path=/;lines=3-4'
+   * ```
+   */
+  qualify(context: Qualifiers): Swhid {
+    const pub = isPublicOrigin(context.origin);
+    return new Swhid(this.type, this.hash, {
+      origin: pub ? context.origin : undefined,
+      visit: pub ? context.visit : undefined,
+      anchor: context.anchor,
+      path: context.anchor ? context.path : undefined,
+      lines: context.lines,
+    });
+  }
+
+  /**
+   * Tells whether two SWHIDs are the same, qualifiers included.
+   *
+   * @param other - The other SWHID.
+   * @returns `true` when their canonical texts are equal.
+   */
+  equals(other: Maybe<Swhid>): boolean {
+    return other !== undefined && this.text === other.text;
+  }
+
+  /**
+   * The canonical text of the SWHID.
+   *
+   * @remarks
+   * The qualifiers come in the order the SWHID specification gives, their
+   * values percent-encoded as swh.model and swhid-clj encode them.
+   *
+   * @returns E.g. `swh:1:cnt:…;origin=https://h/r;lines=3`.
+   */
+  toString(): string {
+    return this.text;
+  }
+
+  /**
+   * The SWHID with its hash shortened to ten digits, for messages.
+   *
+   * @returns E.g. `swh:1:cnt:0123456789;lines=1`; the qualifiers are kept.
+   */
+  toShortString(): string {
+    return this.text.replace(this.hash, this.hash.substring(0, 10));
+  }
+
+  /**
+   * The SWHID in JSON: its canonical text.
+   *
+   * @returns The same as {@link Swhid.toString}.
+   */
+  toJSON(): string {
+    return this.text;
+  }
+}
+
+/**
+ * Encodes qualifiers, in the order the SWHID specification gives.
+ *
+ * @param qualifiers - The qualifiers, their values decoded.
+ * @returns `;key=value` for each qualifier given, or `""` for none.
+ */
+function encodeQualifiers({ origin, visit, anchor, path, lines }: Qualifiers): string {
+  const parts: Array<[string, Maybe<string>]> = [
+    ['origin', origin && encodeOrigin(origin)],
+    ['visit', visit?.toString()],
+    ['anchor', anchor?.toString()],
+    ['path', path && encodePath(path)],
+    ['lines', lines],
+  ];
+  return parts.map(([key, value]) => (value ? `;${key}=${value}` : '')).join('');
+}
+
+/**
+ * Parses the qualifiers of a SWHID.
+ *
+ * @param text - The qualifiers, without the leading `;`.
+ * @returns The qualifiers, their values percent-decoded.
+ * @throws {@link UserError} for an unknown qualifier, or a malformed value:
+ * a line range that is not one, a visit that is not a snapshot, an anchor
+ * that is a content.
+ */
+function parseQualifiers(text: string): Qualifiers {
+  const qualifiers: Qualifiers = {};
+  for (const part of text.split(';')) {
+    const equals = part.indexOf('=');
+    const key = equals < 0 ? part : part.substring(0, equals);
+    const value = equals < 0 ? '' : part.substring(equals + 1);
+    switch (key) {
+      case 'origin':
+        qualifiers.origin = unhex(value);
+        break;
+      case 'visit':
+        qualifiers.visit = Swhid.parse(value);
+        if (qualifiers.visit.type !== 'snp') throw new UserError(`A visit is a snapshot, not ${value}`);
+        break;
+      case 'anchor':
+        qualifiers.anchor = Swhid.parse(value);
+        if (qualifiers.anchor.type === 'cnt') throw new UserError(`An anchor holds objects, not ${value}`);
+        break;
+      case 'path':
+        qualifiers.path = unhex(value);
+        break;
+      case 'lines':
+        if (!LINES.test(value)) throw new UserError(`Not a line range: ${value}`);
+        qualifiers.lines = value;
+        break;
+      default:
+        throw new UserError(`Unknown SWHID qualifier: ${key}`);
+    }
+  }
+  return qualifiers;
+}
 
 /**
  * The value of a SWHID's `lines` qualifier for a range of lines.
@@ -367,124 +333,13 @@ export function lineRange(first: number, last: number): string {
 }
 
 /**
- * Qualifies a core SWHID with its context.
+ * Gives the URL of a SWHID in the archive's web interface.
  *
- * @remarks
- * The `origin` and `visit` qualifiers are added only for a public origin,
- * and the `path` qualifier only with an `anchor`, which it is relative to.
- * The qualifiers come in the order the SWHID specification gives.
- *
- * @param coreSwhid - The core SWHID to qualify.
- * @param origin - The origin URL; left out when it is not public.
- * @param snapshot - The hash of the snapshot of the origin's visit.
- * @param anchor - The SWHID of the commit (or release) holding the object.
- * @param rel - The object's path relative to the repository root, `"."` for the root.
- * @param lines - A line range, `"A-B"` or `"A"`.
- * @returns The qualified SWHID.
- *
- * @example
- * ```ts
- * qualify('swh:1:dir:d', 'https://h/r', 'aa', 'swh:1:rev:y', '.', '3-4');
- * // 'swh:1:dir:d;origin=https://h/r;visit=swh:1:snp:aa;anchor=swh:1:rev:y;path=/;lines=3-4'
- * ```
+ * @param archiveUrl - The archive's web root, e.g. `https://archive.softwareheritage.org`.
+ * @param swhid - A SWHID, or the text of one as the user typed it, inserted as is.
+ * @returns The URL where the archive shows the SWHID.
  */
-export function qualify(
-  coreSwhid: string,
-  origin?: string | null,
-  snapshot?: string | null,
-  anchor?: string | null,
-  rel?: string | null,
-  lines?: string | null,
-): string {
-  const pub = isPublicOrigin(origin);
-  let qualified = coreSwhid;
-  if (pub) qualified += ';origin=' + encodeOrigin(origin);
-  if (pub && snapshot) qualified += ';visit=' + core('snp', snapshot);
-  if (anchor) qualified += ';anchor=' + anchor;
-  if (anchor && rel) qualified += ';path=/' + (rel === '.' ? '' : encodePath(rel));
-  if (lines) qualified += ';lines=' + lines;
-  return qualified;
-}
-
-/**
- * Parses the qualifiers of a SWHID.
- *
- * @param swhid - A qualified SWHID.
- * @returns The qualifiers by name, their values percent-decoded; an empty
- * object for a core SWHID.
- *
- * @example
- * ```ts
- * qualifiers('swh:1:cnt:x;origin=https://h/o%20r;path=/src/my%20file%20%C3%A9.el');
- * // { origin: 'https://h/o r', path: '/src/my file é.el' }
- * ```
- */
-export function qualifiers(swhid: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const qualifier of swhid.split(';').slice(1)) {
-    const pos = qualifier.indexOf('=') < 0 ? qualifier.length : qualifier.indexOf('=');
-    out[qualifier.substring(0, pos)] = unhex(qualifier.substring(Math.min(pos + 1, qualifier.length)));
-  }
-  return out;
-}
-
-/**
- * Lists the directories above a path relative to the repository root.
- *
- * @param path - A relative path with `/` separators, or `"."` for the root.
- * @returns The ancestor directories from the root `"."` down; none for the root itself.
- *
- * @example
- * ```ts
- * ancestors('a/b/c.txt'); // ['.', 'a', 'a/b']
- * ancestors('.');         // []
- * ```
- */
-export function ancestors(path: string): string[] {
-  if (path === '.') return [];
-  const acc = ['.'];
-  let dir: Maybe<string>;
-  for (const part of path.split('/').slice(0, -1)) {
-    dir = dir ? `${dir}/${part}` : part;
-    acc.push(dir);
-  }
-  return acc;
-}
-
-/**
- * Formats an ISO 8601 date in local time, for messages.
- *
- * @param date - An ISO 8601 date, as the archive gives it.
- * @returns The date as `YYYY-MM-DD HH:MM` in local time, or `date` unchanged
- * when it does not parse.
- */
-export function formatDate(date: string): string {
-  const parsed = new Date(date);
-  if (isNaN(parsed.getTime())) return date;
-  const twoDigits = (part: number) => String(part).padStart(2, '0');
-  const day = `${parsed.getFullYear()}-${twoDigits(parsed.getMonth() + 1)}-${twoDigits(parsed.getDate())}`;
-  const time = `${twoDigits(parsed.getHours())}:${twoDigits(parsed.getMinutes())}`;
-  return `${day} ${time}`;
-}
-
-/**
- * Gives the repository's name in an origin URL: its last path segment.
- *
- * @remarks
- * Splits on `\\` too, so that a local Windows path names its directory.
- *
- * @param origin - An origin URL, or a local path for a non-public remote.
- * @returns The last segment, without a `.git` suffix.
- *
- * @example
- * ```ts
- * originName('https://github.com/bzg/swh.el'); // 'swh.el'
- * ```
- */
-export function originName(origin: string): string {
-  const parts = origin.replace(/[\\/]+$/, '').split(/[\\/]/);
-  return parts[parts.length - 1].replace(/\.git$/, '');
-}
+export const browseUrl = (archiveUrl: string, swhid: Swhid | string) => `${baseUrl(archiveUrl)}/${swhid}`;
 
 /**
  * Finds the SWHIDs in a text, with their qualifiers.
@@ -492,15 +347,15 @@ export function originName(origin: string): string {
  * @remarks
  * A SWHID ends at a blank, a quote, a backtick or a bracket. Trailing
  * punctuation (`.`, `,`, `:`, `;`) is left out, as it more likely ends the
- * sentence than the SWHID.
+ * sentence than the SWHID. The SWHIDs are given as written, not parsed:
+ * their qualifiers are not checked.
  *
  * @param text - The text to search, e.g. a whole document.
- * @returns `[offset, swhid]` pairs, `offset` being the SWHID's position in `text`.
+ * @returns `[offset, text]` pairs, `offset` being the SWHID's position in `text`.
  */
 export function findSwhids(text: string): Array<[number, string]> {
-  const re = /swh:1:(?:cnt|dir|rev|rel|snp):[0-9a-f]{40}(?:;[^\s"'`<>()[\]{}]*)?/g;
   const out: Array<[number, string]> = [];
-  for (const match of text.matchAll(re)) {
+  for (const match of text.matchAll(SWHID_IN_TEXT)) {
     out.push([match.index!, match[0].replace(/[.,:;]+$/, '')]);
   }
   return out;

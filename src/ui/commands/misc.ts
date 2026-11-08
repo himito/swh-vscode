@@ -5,7 +5,7 @@
  */
 
 import * as vscode from 'vscode';
-import { browseUrl, isSwhid, type Maybe } from '#core';
+import { browseUrl, type Maybe, Swhid } from '#core';
 import { archiveUrl, openUrl, withoutContext } from '../helpers';
 import { MENU, type MenuEntry } from '../menu';
 
@@ -16,7 +16,7 @@ import { MENU, type MenuEntry } from '../menu';
  * @returns Why it is not a SWHID, or `undefined` when it is.
  */
 function swhidInputError(input: string): Maybe<string> {
-  return isSwhid(input.trim()) ? undefined : 'Not a SWHID';
+  return Swhid.isValid(input.trim()) ? undefined : 'Not a SWHID';
 }
 
 /** An item of the Quick Pick menu: a separator, a command to run, or the "Without context" switch. */
@@ -97,7 +97,7 @@ export class MiscCommands {
    * Asks the user for a SWHID.
    *
    * @remarks
-   * The input box checks the SWHID as it is typed (see {@link core!isSwhid}),
+   * The input box checks the SWHID as it is typed (see {@link core!Swhid.isValid}),
    * and stays open when the focus moves away, e.g. to copy a SWHID elsewhere.
    *
    * @returns The SWHID typed, trimmed, or `undefined` when the input box is dismissed.

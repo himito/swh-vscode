@@ -5,6 +5,7 @@
  */
 
 import type { Git } from '../git';
+import type { Swhid } from '../swhid';
 import type { Maybe } from '../types';
 import type { ArchiveApi } from './archiveApi';
 
@@ -24,7 +25,7 @@ export type OriginInfo = {
   /** The SHA-1 of that visit's snapshot; only when archived. */
   snapshot?: string;
   /** The revision SWHID of the commit the current branch's upstream points to, when asked for. */
-  upstream?: string;
+  upstream?: Swhid;
   /** Whether the archive holds {@link OriginInfo.upstream}. */
   'upstream-archived'?: boolean;
 };
@@ -58,9 +59,9 @@ export type SaveRequest = {
 /** The SWHID of a file, directory or range of lines. */
 export type SwhidInfo = {
   /** The qualified SWHID: the core SWHID with its context qualifiers (origin, visit, anchor, path, lines). */
-  swhid: string;
+  swhid: Swhid;
   /** The core SWHID, without qualifiers, e.g. `swh:1:cnt:…`. */
-  core: string;
+  core: Swhid;
   /** Whether the archive holds the core SWHID. */
   archived: boolean;
   /** The origin of the repository holding the file, public or not. */
@@ -71,7 +72,7 @@ export type SwhidInfo = {
    * The revision SWHID of the commit whose version is identified, when the
    * archived version was asked for and found.
    */
-  version?: string;
+  version?: Swhid;
   /** Why the archive was not asked: the SWHID then comes from Git alone. */
   unchecked?: string;
 };
@@ -79,7 +80,7 @@ export type SwhidInfo = {
 /** Whether the archive holds a file or directory, see {@link Swh.fileStatus}. */
 export type FileStatus = {
   /** Its core SWHID, e.g. `swh:1:cnt:…`. */
-  swhid: string;
+  swhid: Swhid;
   /** Whether the archive holds it. */
   archived: boolean;
 };
@@ -89,7 +90,7 @@ export type TreeNode = {
   /** The path relative to the repository root, with `/` separators; `.` for the root. */
   path: string;
   /** The core SWHID: `dir` for a directory, `cnt` for a file, `rev` for a submodule's commit. */
-  swhid: string;
+  swhid: Swhid;
   /** Whether the node is a directory. */
   dir: boolean;
   /** Whether the archive holds it, itself or through an archived directory above it. */

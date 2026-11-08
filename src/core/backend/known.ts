@@ -5,6 +5,7 @@
  */
 
 import type { Git } from '../git';
+import type { Swhid } from '../swhid';
 import type { Maybe } from '../types';
 import { Memo, memoGet, memoPut, now, uniq, UNKNOWN } from './memo';
 import type { ArchiveApi } from './archiveApi';
@@ -16,7 +17,7 @@ export class SwhKnown {
   readonly git: Git;
   /** The Software Heritage archive, see {@link ArchiveApi}. */
   readonly archive: ArchiveApi;
-  /** SWHID → whether the archive holds it; see `memoGet`. */
+  /** SWHID, as its canonical text → whether the archive holds it; see `memoGet`. */
   protected knownMemo: Memo<boolean> = new Map();
   /**
    * Bumped whenever the memos forget answers: a request sent before then
@@ -51,8 +52,8 @@ export class SwhKnown {
    * @param swhid - A core SWHID.
    * @returns `true` only when a remembered answer says so.
    */
-  knownP(swhid: string): boolean {
-    return memoGet(this.knownMemo, swhid) === true;
+  knownP(swhid: Swhid): boolean {
+    return memoGet(this.knownMemo, swhid.toString()) === true;
   }
 
   /**
@@ -61,18 +62,32 @@ export class SwhKnown {
    * @remarks
    * The answers go to the memo, where {@link Swh.knownP} reads them. Answers
    * that arrive after the memo forgot answers (see {@link Swh.refresh}) are
-   * not stored.
+   * not stored. The archive is asked about the SWHIDs' canonical texts.
    *
    * @param swhids - Core SWHIDs; duplicates are asked once.
    * @throws {@link UserError} as {@link ArchiveApi.known} does.
    */
-  async rememberKnown(swhids: string[]): Promise<void> {
-    const unknown = uniq(swhids).filter((swhid) => memoGet(this.knownMemo, swhid) === UNKNOWN);
+  async rememberKnown(swhids: readonly Swhid[]): Promise<void> {
+    const texts = uniq(swhids.map((swhid) => swhid.toString()));
+    const unknown = texts.filter((text) => memoGet(this.knownMemo, text) === UNKNOWN);
     if (!unknown.length) return;
     const epoch = this.memoEpoch;
     const answers = await this.archive.known(unknown);
     if (epoch !== this.memoEpoch) return;
-    for (const [swhid, known] of answers) memoPut(this.knownMemo, swhid, known);
+    for (const [text, known] of answers) memoPut(this.knownMemo, text, known);
+  }
+
+  /**
+   * Remember that the archive holds a SWHID, without asking it.
+   *
+   * @remarks
+   * For what follows from another answer: e.g. an archived commit holds
+   * its files.
+   *
+   * @param swhid - A core SWHID.
+   */
+  protected rememberArchived(swhid: Swhid): void {
+    memoPut(this.knownMemo, swhid.toString(), true);
   }
 
   /**
@@ -82,7 +97,7 @@ export class SwhKnown {
    * @returns `true` when the archive holds it.
    * @throws {@link UserError} as {@link Swh.rememberKnown} does.
    */
-  async archivedP(swhid: string): Promise<boolean> {
+  async archivedP(swhid: Swhid): Promise<boolean> {
     await this.rememberKnown([swhid]);
     return this.knownP(swhid);
   }

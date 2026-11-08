@@ -17,7 +17,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { browseUrl, buildScan, errorMessage, type Maybe, Scan, ScanItem, type ScanStatus, scanSummary, shortSwhid, Swh, typeOf, UserError } from '#core';
+import { browseUrl, buildScan, errorMessage, type Maybe, Scan, ScanItem, type ScanStatus, scanSummary, Swh, UserError } from '#core';
 import { archiveUrl, currentRepoRoot, info, openUrl } from './helpers';
 import { openSwhidUri } from './reports';
 
@@ -60,7 +60,7 @@ type ItemKind = 'dir' | 'file' | 'submodule';
  */
 function itemKind(scanItem: ScanItem): ItemKind {
   if (scanItem.dir) return 'dir';
-  return typeOf(scanItem.swhid) === 'rev' ? 'submodule' : 'file';
+  return scanItem.swhid.type === 'rev' ? 'submodule' : 'file';
 }
 
 /**
@@ -103,6 +103,10 @@ function itemContextValue(scanItem: ScanItem): string {
  * The tooltip of a scan item: its path and status, and its SWHID, as a link
  * to the archive when it is archived.
  *
+ * @remarks
+ * The path is escaped: a file name is the repository's, not Markdown to
+ * render, and may hold `*`, `_`, brackets or `$(…)`.
+ *
  * @param scanItem - The item.
  * @returns The tooltip, whose links may run `swh.openSwhid` only.
  */
@@ -111,8 +115,9 @@ function itemTooltip(scanItem: ScanItem): vscode.MarkdownString {
   tip.isTrusted = { enabledCommands: ['swh.openSwhid'] };
 
   const shownPath = scanItem.path === '.' ? './' : scanItem.path;
-  tip.appendMarkdown(`**${shownPath}**: ${STATUS_WORDS[scanItem.status]}\n\n`);
-  tip.appendMarkdown(scanItem.status === 'archived' ? `[${scanItem.swhid}](${openSwhidUri(scanItem.swhid)})` : scanItem.swhid);
+  tip.appendMarkdown('**').appendText(shownPath).appendMarkdown(`**: ${STATUS_WORDS[scanItem.status]}\n\n`);
+  const swhid = scanItem.swhid.toString();
+  tip.appendMarkdown(scanItem.status === 'archived' ? `[${swhid}](${openSwhidUri(swhid)})` : swhid);
 
   return tip;
 }
@@ -323,7 +328,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    */
   async openFile(clicked?: ScanItem) {
     const item = this.actionItem(clicked);
-    if (item.dir || typeOf(item.swhid) === 'rev' || !this.root) return;
+    if (item.dir || item.swhid.type === 'rev' || !this.root) return;
     await vscode.window.showTextDocument(vscode.Uri.file(path.join(this.root, item.path)), { preview: true });
   }
 
@@ -345,7 +350,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    */
   async copySwhid(clicked?: ScanItem) {
     const swhid = this.actionItem(clicked).swhid;
-    await vscode.env.clipboard.writeText(swhid);
-    info(`Copied ${shortSwhid(swhid)}`);
+    await vscode.env.clipboard.writeText(swhid.toString());
+    info(`Copied ${swhid.toShortString()}`);
   }
 }

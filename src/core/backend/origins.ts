@@ -6,7 +6,8 @@
  */
 
 import { UserError } from '../errors';
-import { core, isPublicOrigin, normalizeOrigin, originCandidates } from '../swhid';
+import { isPublicOrigin, normalizeOrigin, originCandidates } from '../origin';
+import { Swhid } from '../swhid';
 import { forgetNegatives, fresh, Memo, MEMO_TTL, memoPut } from './memo';
 import { SwhKnown } from './known';
 import type { OriginInfo, OriginVisits, SaveRequest, Visit } from './types';
@@ -150,7 +151,7 @@ export class SwhOrigins extends SwhKnown {
     if (!upstream?.startsWith('refs/remotes/')) return {};
     const commit = await this.git.get(root, ['rev-parse', '--verify', '-q', '@{upstream}^{commit}']);
     if (!commit) return {};
-    const rev = core('rev', commit);
+    const rev = Swhid.of('rev', commit);
     return { upstream: rev, 'upstream-archived': await this.archivedP(rev) };
   }
 

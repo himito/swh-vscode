@@ -16,7 +16,7 @@ import { execFileSync } from 'child_process';
 import { promises as fs, realpathSync, mkdtempSync, writeFileSync, mkdirSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Git, HttpArchiveApi, Swh } from '#core';
+import { Git, HttpArchiveApi, Swh, Swhid } from '#core';
 
 /** The temporary Git repository the tests run on, created before them. */
 let dir: string;
@@ -129,8 +129,8 @@ test('git root and content SWHID', async () => {
   const s = swh();
   assert.equal(await s.git.root(path.join(dir, 'sub', 'b.txt')), dir);
   assert.equal(await s.git.root(os.tmpdir()), undefined);
-  assert.equal(await s.contentSwhid(path.join(dir, 'a.txt'), dir), 'swh:1:cnt:' + git('rev-parse', 'HEAD:a.txt'));
-  assert.equal(await s.worktreeSwhid(path.join(dir, 'sub'), dir), 'swh:1:dir:' + git('rev-parse', 'HEAD:sub'));
+  assert.equal(String(await s.contentSwhid(path.join(dir, 'a.txt'), dir)), 'swh:1:cnt:' + git('rev-parse', 'HEAD:a.txt'));
+  assert.equal(String(await s.worktreeSwhid(path.join(dir, 'sub'), dir)), 'swh:1:dir:' + git('rev-parse', 'HEAD:sub'));
   assert.equal(await s.originOf(dir), 'https://example.org/me/repo');
 });
 
@@ -164,8 +164,8 @@ test('direct tree is Merkle-pruned', async () => {
 
   reset([rootSwhid]);
   let nodes = await swh().tree(dir);
-  assert.deepEqual(nodes[0], { path: '.', swhid: rootSwhid, dir: true, archived: true });
-  assert.deepEqual(nodes.slice(1).map((n) => n.swhid), [aSwhid, subSwhid, bSwhid]);
+  assert.deepEqual({ ...nodes[0], swhid: String(nodes[0].swhid) }, { path: '.', swhid: rootSwhid, dir: true, archived: true });
+  assert.deepEqual(nodes.slice(1).map((n) => String(n.swhid)), [aSwhid, subSwhid, bSwhid]);
   assert.ok(nodes.every((n) => n.archived));
   // the archived root covers everything: one request, directories only
   assert.equal(asked.length, 1);
@@ -188,7 +188,7 @@ test('qualified SWHID, anchored and archived', async () => {
   const s = swh();
   const info = await s.qualifiedSwhid(path.join(dir, 'a.txt'), '1');
   assert.equal(
-    info.swhid,
+    String(info.swhid),
     `${aSwhid};origin=https://example.org/me/repo;visit=swh:1:snp:${'ab'.repeat(20)};anchor=swh:1:rev:${commit};path=/a.txt;lines=1`,
   );
   assert.equal(info.archived, true);
@@ -198,15 +198,15 @@ test('qualified SWHID, anchored and archived', async () => {
 
   // unedited: the archived version is the working tree's, its lines hold
   const same = await s.qualifiedSwhid(path.join(dir, 'a.txt'), '1', true);
-  assert.equal(same.version, 'swh:1:rev:' + commit);
-  assert.ok(same.swhid.endsWith(';lines=1'));
+  assert.ok(same.version?.equals(Swhid.of('rev', commit)));
+  assert.equal(same.swhid.qualifiers.lines, '1');
 
   // edited since: the archived version is that of the commit
   writeFileSync(path.join(dir, 'a.txt'), 'edited\n');
   const archivedInfo = await s.qualifiedSwhid(path.join(dir, 'a.txt'), '1', true);
-  assert.equal(archivedInfo.core, aSwhid);
-  assert.equal(archivedInfo.version, 'swh:1:rev:' + commit);
-  assert.ok(!archivedInfo.swhid.includes('lines='));
+  assert.equal(String(archivedInfo.core), aSwhid);
+  assert.ok(archivedInfo.version?.equals(Swhid.of('rev', commit)));
+  assert.equal(archivedInfo.swhid.qualifiers.lines, undefined);
   const now = await s.qualifiedSwhid(path.join(dir, 'a.txt'));
   assert.equal(now.archived, false);
   assert.equal(await s.unarchivedWhy(path.join(dir, 'a.txt')), 'it has uncommitted changes');
@@ -235,7 +235,7 @@ test('status, unreachable archive, save', async () => {
   }) as typeof fetch;
   try {
     const t = await swh().qualifiedSwhid(path.join(dir, 'a.txt'));
-    assert.equal(t.swhid, 'swh:1:cnt:' + git('rev-parse', 'HEAD:a.txt'));
+    assert.equal(String(t.swhid), 'swh:1:cnt:' + git('rev-parse', 'HEAD:a.txt'));
     assert.match(t.unchecked!, /Cannot reach/);
   } finally {
     globalThis.fetch = failing;

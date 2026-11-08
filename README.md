@@ -79,13 +79,14 @@ The status bar shows whether the current file is archived, with the same icons a
 - a spinner, checking
 - a warning sign, the check failed
 
-The status is checked when you switch to a file and each time you save it. Click the item to copy the SWHID. Without a token, the item also shows how many API requests you have used this hour, e.g. `SWH 48/120`.
+The status is checked when you switch to a file and each time you save it. An archived file that has not changed is not checked again; any other status is, as it may have changed since. Click the item to copy the SWHID. Without a token, the item also shows how many API requests you have used this hour, e.g. `SWH 48/120`.
 
 ### Scan view
 
-**Scan** fills the *Scan* view of the Software Heritage side bar with the tracked working tree. Each file and directory is marked as archived, partially archived or not archived, and each directory shows how many of its files are archived. Archived directories start folded. Each item's context menu lets you:
+**Scan** fills the *Scan* view of the Software Heritage side bar with the tracked working tree. Each file and directory is marked as archived, partially archived or not archived, and each directory shows how many of its files are archived. Archived directories start folded. Click a file to open it. Each item's context menu lets you:
 
-- open the item in the archive
+- open the file
+- open the item in the archive, when it is archived
 - copy its SWHID
 
 ### SWHID links
@@ -151,9 +152,12 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 │   │   ├── git.ts       Running Git, and the temporary index copies
 │   │   ├── http.ts      HTTP requests, through fetch
 │   │   ├── errors.ts    The error types: UserError, Cancelled
-│   │   ├── swhid.ts     SWHIDs, origins and their encodings (pure functions)
+│   │   ├── swhid.ts     The Swhid value object: parsing, qualifiers, canonical text
+│   │   ├── origin.ts    Origins: normalizing remote URLs, and their encodings
+│   │   ├── encoding.ts  Percent-encoding, query strings, base URLs
 │   │   ├── citation.ts  BibTeX entries
 │   │   ├── scan.ts      The scan as a tree, and its figures (pure functions)
+│   │   ├── util.ts      Path ancestors and date formatting
 │   │   └── types.ts     Shared type helpers, e.g. Maybe<T>
 │   └── ui/              VS Code's side: everything here imports `vscode`
 │       ├── index.ts     The folder's public API, re-exported
@@ -187,6 +191,8 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
 Only [extension.ts](src/extension.ts) and the modules in [src/ui/](src/ui/) import `vscode`. The modules in [src/core/](src/core/) are plain TypeScript, which is why the unit tests can run them with Node alone. Code that works without VS Code goes in `core/`, and the parts that need VS Code go in `ui/`.
 
 Between folders, modules import a folder's `index.ts` through an alias, `#core` or `#ui` (`import { Swh } from '#core'`); within a folder, they import each other with relative paths. The aliases are Node's [subpath imports](https://nodejs.org/api/packages.html#subpath-imports), defined in the `imports` field of [package.json](package.json): each points TypeScript at the sources (`types`) and Node at the compiled files in `out/` (`default`), which is why [tsconfig.json](tsconfig.json) uses `"module": "node16"`. If `outDir` or the folders change, update both paths there. `Swh` is built in layers, each file's class extending the one below it: `known` → `origins` → `swhids` → `Swh`.
+
+SWHIDs are values of the [`Swhid`](src/core/swhid.ts) class, not strings: `Swhid.of(type, hash)` and `Swhid.parse(text)` are the only ways to make one, and both check it, so a `Swhid` is always valid. It is immutable: `qualify({ origin, visit, anchor, path, lines })` gives a new one. Two instances of the same SWHID are different objects, so compare them with `equals`, and key maps by `toString()`, the canonical text. SWHIDs become text only at the edges: the `ArchiveApi` port takes their text, as the Web API does, and so do the clipboard and the URLs. A SWHID the user typed, or found in a document, is passed on as written.
 
 `Swh` never talks HTTP itself: it asks the archive through the [`ArchiveApi`](src/core/backend/archiveApi.ts) interface, in its own terms (SWHIDs, origins, visits, save requests, citations). [`HttpArchiveApi`](src/core/backend/adapters/httpArchiveApi.ts) implements it over the archive's Web API, and [extension.ts](src/extension.ts) passes it to `Swh`; the tests can pass a fake archive instead. This is the "ports and adapters" (hexagonal) architecture: the interface is the port, its implementations in `adapters/` the adapters. To support another way of reaching the archive, implement `ArchiveApi`; nothing else changes.
 

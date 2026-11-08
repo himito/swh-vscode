@@ -16,6 +16,9 @@ import { UserError } from '../../errors';
 import type { Maybe } from '../../types';
 import type { SaveRequest, Visit } from '../types';
 
+/** A SHA-1 in hexadecimal, as snapshot identifiers are. */
+const SHA1 = /^[0-9a-f]{40}$/;
+
 /**
  * Whether a JSON value is an object, rather than a list, a scalar or `null`.
  *
@@ -65,13 +68,13 @@ export type ApiVisit = {
  *
  * @param raw - The visit as the API sent it.
  * @returns The visit, or `undefined` when it has no date or status as strings;
- * a snapshot that is not a string is left out.
+ * a snapshot that is not a SHA-1 in hexadecimal is left out.
  */
 export function toVisit(raw: unknown): Maybe<Visit> {
   if (!isRecord(raw)) return undefined;
   const { date, status, snapshot } = raw as ApiVisit;
   if (typeof date !== 'string' || typeof status !== 'string') return undefined;
-  return typeof snapshot === 'string' ? { date, status, snapshot } : { date, status };
+  return typeof snapshot === 'string' && SHA1.test(snapshot) ? { date, status, snapshot } : { date, status };
 }
 
 /**

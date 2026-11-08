@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import { core, formatDate, type Maybe, type OriginInfo, type OriginVisits, type SaveRequest, shortHash, type Visit } from '#core';
+import { formatDate, type Maybe, type OriginInfo, type OriginVisits, type SaveRequest, Swhid, type Visit } from '#core';
 import { ask, busy, info } from '../helpers';
 import type { CommandContext } from './context';
 
@@ -28,7 +28,7 @@ const VISIT_STATUS_WIDTH = 8;
 function visitLine(visit: Visit): string {
   const date = formatDate(visit.date);
   const status = visit.status.padEnd(VISIT_STATUS_WIDTH);
-  const snapshot = visit.snapshot ? core('snp', visit.snapshot) : '';
+  const snapshot = visit.snapshot ? Swhid.of('snp', visit.snapshot).toString() : '';
   return `${date}  ${status} ${snapshot}`.trimEnd();
 }
 
@@ -75,7 +75,7 @@ export class ArchiveCommands {
     const lastVisit = `last visit ${origin.date ? formatDate(origin.date) : 'unknown'}`;
 
     if (upstream && !origin['upstream-archived']) {
-      return { text: `${url} is archived (${lastVisit}), upstream ${shortHash(upstream)} not yet`, saveWouldHelp: true };
+      return { text: `${url} is archived (${lastVisit}), upstream ${upstream.shortHash} not yet`, saveWouldHelp: true };
     }
 
     const upstreamNote = upstream ? ', upstream included' : '';

@@ -13,7 +13,8 @@
 
 import { UserError } from '../../errors';
 import { headerNumber, is2xx, NOT_JSON, type Resp, retrieve } from '../../http';
-import { baseUrl, pathOrigin, queryString } from '../../swhid';
+import { baseUrl, queryString } from '../../encoding';
+import { pathOrigin } from '../../origin';
 import type { Maybe } from '../../types';
 import { now, partition } from '../memo';
 import { type ArchiveApi, type CitationTarget, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from '../archiveApi';

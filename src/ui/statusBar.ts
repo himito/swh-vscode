@@ -7,7 +7,9 @@
  * for the workspace folder. It is checked when the user switches to a file,
  * each time the file is saved, and when the workspace or the `swh` settings
  * change. Answers are kept per path, together with the file's modification
- * time, so switching back to an unchanged file asks the archive nothing.
+ * time: switching back to an unchanged archived file checks nothing. Any
+ * other status is checked again, which the backend's memo answers without
+ * asking the archive when it asked it recently.
  *
  * Clicking the item runs `swh.statusBarCopy`, which copies the SWHID of the
  * file or folder shown. Without an API token, the item also shows how many
@@ -18,7 +20,7 @@
 
 import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
-import { core, errorMessage, isPublicOrigin, type Maybe, RATE_LIMIT_MESSAGE, Swh, UserError } from '#core';
+import { errorMessage, isPublicOrigin, type Maybe, RATE_LIMIT_MESSAGE, Swh, Swhid, UserError } from '#core';
 import { ARCHIVE_URL_SETTING, config, fileEditor, realCurrentDir } from './helpers';
 
 /**
@@ -130,12 +132,34 @@ type Entry = {
   /** The archival status found. */
   status: Status;
   /** The core SWHID of the file or directory, when known. */
-  swhid?: string;
+  swhid?: Swhid;
   /** Why the check failed, when the status is `error`. */
   error?: string;
   /** The number of the check that set this entry: a later check wins. */
   check: number;
 };
+
+/**
+ * Whether a path must be checked again, given what is known about it.
+ *
+ * @remarks
+ * Only two answers are kept: a check still under way, and an archived file
+ * unchanged since, as what the archive holds stays there. Anything else is
+ * checked again: a directory's stamp misses changes to the files in it, a
+ * negative answer may no longer hold, and a failure may not happen again.
+ * Checking again is cheap: the backend's memo answers what the archive was
+ * asked recently.
+ *
+ * @param target - The file or directory shown.
+ * @param entry - What is known about it, if anything.
+ * @param stamp - Its stamp now, see `stampOf`.
+ * @returns `true` when it must be checked.
+ */
+function needsCheck(target: Shown, entry: Maybe<Entry>, stamp: string): boolean {
+  if (entry?.stamp !== stamp) return true;
+  if (entry.status === 'pending') return false;
+  return target.dir || entry.status !== 'archived';
+}
 
 /**
  * Records a status found by a check, and the SWHID when known; see `StatusBar.record`.
@@ -144,7 +168,7 @@ type Entry = {
  * {@link StatusBar.check} passes it to the helpers that find a status, which
  * may call it more than once, e.g. `not-archived` then `origin-archived`.
  */
-type Report = (status: Status, swhid?: string) => void;
+type Report = (status: Status, swhid?: Swhid) => void;
 
 /**
  * The status bar item showing whether the current file is archived.
@@ -266,11 +290,12 @@ export class StatusBar implements vscode.Disposable {
    * The item is hidden when the `swh.statusBar.enabled` setting is off, or
    * when {@link StatusBar.target} finds nothing to show.
    *
-   * A path is checked again only when its stamp (see `stampOf`) differs
-   * from the one it was checked at, unless `force` is set. A file with
+   * A path is checked again when `force` is set, or as `needsCheck` says:
+   * only an archived file that has not changed since is not. A file with
    * unsaved changes is not checked: the item keeps the status of the file on
    * disk, or stays hidden until the file is saved when no status is known
-   * yet. The check runs in the background; the item shows `pending` meanwhile.
+   * yet. The check runs in the background: the item shows `pending`
+   * meanwhile, or its previous status when the path has not changed.
    *
    * A call overtaken by a newer one stops at its next `await`, leaving the
    * item to the newer call.
@@ -292,8 +317,7 @@ export class StatusBar implements vscode.Disposable {
     if (target && !target.dirty) {
       const stamp = await stampOf(target.path);
       if (superseded()) return;
-      const changed = this.entries.get(target.path)?.stamp !== stamp;
-      if (force || changed) void this.check(target, stamp);
+      if (force || needsCheck(target, this.entries.get(target.path), stamp)) void this.check(target, stamp);
     }
     this.render();
   }
@@ -302,24 +326,28 @@ export class StatusBar implements vscode.Disposable {
    * Ask for the archival status of a file or directory, and record it.
    *
    * @remarks
-   * The path is recorded as `pending` at once, then with each status
-   * {@link StatusBar.fileStatus} or {@link StatusBar.dirStatus} reports,
-   * through {@link StatusBar.record}.
+   * A path new or changed since its last check is recorded as `pending` at
+   * once; an unchanged one keeps its status meanwhile. Then each status
+   * {@link StatusBar.fileStatus} or {@link StatusBar.dirStatus} reports is
+   * recorded, through {@link StatusBar.record}.
    *
    * Failures, including a path that is no longer inside a Git repository,
    * are recorded as the `error` status, with their message in the tooltip.
    * Reaching the API's rate limit is also shown as a warning, since it is
-   * the one failure the user can act on. The returned promise never rejects.
+   * the one failure the user can act on, unless the previous check of the
+   * path already failed so. The returned promise never rejects.
    *
    * @param target - The file or directory to check.
    * @param stamp - Its stamp at the time of the check, see `stampOf`.
    */
   private async check(target: Shown, stamp: string): Promise<void> {
     const check = ++this.checks;
-    const report = (status: Status, swhid?: string, error?: string) =>
+    const report = (status: Status, swhid?: Swhid, error?: string) =>
       this.record(target.path, { stamp, status, swhid, error, check });
 
-    report('pending');
+    // a path checked again unchanged keeps showing its status until the answer
+    const previous = this.entries.get(target.path);
+    if (previous?.stamp !== stamp) report('pending');
     try {
       const root = await this.swh.git.root(target.path);
       if (!root) throw new UserError('Not inside a Git repository');
@@ -327,7 +355,9 @@ export class StatusBar implements vscode.Disposable {
       else await this.fileStatus(target.path, root, report);
     } catch (error) {
       const why = errorMessage(error);
-      if (why.startsWith(RATE_LIMIT_MESSAGE)) void vscode.window.showWarningMessage(why);
+      // the one failure the user can act on; told once, not at each check again
+      const rateLimited = (message?: string) => !!message?.startsWith(RATE_LIMIT_MESSAGE);
+      if (rateLimited(why) && !rateLimited(previous?.error)) void vscode.window.showWarningMessage(why);
       report('error', undefined, why);
     }
   }
@@ -360,15 +390,17 @@ export class StatusBar implements vscode.Disposable {
    * Find the status of a file.
    *
    * @remarks
-   * Without a public origin, the archive is not asked: the file is reported
-   * as not archived, with the SWHID Git computes. Otherwise the file is
-   * `archived` or `not-archived`, and a file not archived whose origin is
-   * archived becomes `origin-archived`.
+   * Without a public origin, the archive cannot hold the file and is not
+   * asked: it is reported `not-archived`, with the SWHID Git computes, if
+   * Git can. Otherwise it is reported `archived` or `not-archived` with its
+   * SWHID. A file not archived is then reported `origin-archived` if its
+   * origin is archived; when that lookup fails, it stays `not-archived`.
    *
    * @param file - The real path of the file.
    * @param root - The root of the file's Git repository.
    * @param report - Records a status, and the SWHID when known.
-   * @throws {@link core!UserError} when Git cannot hash the file or the archive fails.
+   * @throws {@link core!UserError} when the repository has a public origin
+   * and Git cannot hash the file, or the archive fails.
    */
   private async fileStatus(file: string, root: string, report: Report): Promise<void> {
     if (!isPublicOrigin(await this.swh.originOf(root))) {
@@ -394,10 +426,15 @@ export class StatusBar implements vscode.Disposable {
    * Find the status of a directory.
    *
    * @remarks
-   * A directory is `archived` when its origin is archived and its tree, with
-   * no untracked or modified files, is the one the archive holds. It is
-   * `origin-archived` when only its origin is archived, `not-archived`
-   * otherwise.
+   * - `not-archived`: its origin is not archived.
+   * - `origin-archived`: its origin is archived, but the directory is not:
+   *   it has untracked or modified files, its repository has no commit yet,
+   *   or the archive does not hold its tree.
+   * - `archived`: its origin is archived, and so is its tree in HEAD, which
+   *   it matches.
+   *
+   * Only a directory that matches HEAD's tree is reported with a SWHID: that
+   * of the tree.
    *
    * @param dir - The real path of the directory.
    * @param root - The root of the directory's Git repository.
@@ -418,18 +455,19 @@ export class StatusBar implements vscode.Disposable {
       return;
     }
 
-    const swhid = core('dir', tree);
+    const swhid = Swhid.of('dir', tree);
     const status = (await this.swh.archivedP(swhid)) ? 'archived' : 'origin-archived';
     report(status, swhid);
   }
 
   /**
-   * Show the known status of the current file, or hide the item when there is none.
+   * Show the known status of the current file or folder, or hide the item
+   * when there is none.
    *
    * @remarks
-   * The text comes from the `swh.statusBar.lighters` setting, followed by
-   * the API requests used this hour when there is no token. The tooltip
-   * tells the status in words, the SWHID, and what a click does.
+   * The text is given by `itemText`, the tooltip by `tooltipText`. A file
+   * with unsaved changes is read from its editor at each call, so that
+   * editing it or undoing the edits updates the tooltip.
    */
   render(): void {
     const shown = this.current;
@@ -484,7 +522,7 @@ function tooltipText(shown: Shown, entry: Entry, dirty: boolean, used: Maybe<str
   const paragraphs = [
     dirty && 'Modified: the status is that of the file on disk',
     DESCRIPTIONS[entry.status] + (entry.error ? `: ${entry.error}` : ''),
-    entry.swhid ?? 'Software Heritage',
+    entry.swhid?.toString() ?? 'Software Heritage',
     used && `${used} API requests this hour, no token`,
     `Click: copy the SWHID of the ${shown.dir ? 'folder' : 'file'}`,
   ];

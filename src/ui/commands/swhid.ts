@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { bibtex, browseUrl, citationWhat, isPublicOrigin, type Maybe, normalizeOrigin, qualifiers, shortHash, type SwhidInfo } from '#core';
+import { bibtex, browseUrl, citationWhat, isPublicOrigin, type Maybe, normalizeOrigin, type SwhidInfo } from '#core';
 import { archiveUrl, ask, busy, info, openUrl } from '../helpers';
 import type { ArchiveCommands } from './archive';
 import type { CommandInput, CommandContext, Target } from './context';
@@ -48,17 +48,6 @@ type SwhidResult = LabeledText & {
   /** The target's SWHID, as the backend computed it. */
   swhidInfo: SwhidInfo;
 };
-
-/**
- * A SWHID without its context qualifiers, but with its lines.
- *
- * @param coreSwhid - The core SWHID, e.g. `swh:1:cnt:…`.
- * @param lines - The lines, if any.
- * @returns The SWHID, e.g. `swh:1:cnt:…;lines=3-7`.
- */
-function bareSwhid(coreSwhid: string, lines: Maybe<string>): string {
-  return lines ? `${coreSwhid};lines=${lines}` : coreSwhid;
-}
 
 /**
  * A Markdown link to a target in the archive, `[file, lines A-B](url)`.
@@ -159,10 +148,11 @@ export class SwhidCommands {
    */
   private async swhidText(swhidInfo: SwhidInfo, { what, bare, targetPath }: SwhidRequest): Promise<LabeledText> {
     // the lines the SWHID kept: dropped for an archived version that differs
-    const lines: Maybe<string> = qualifiers(swhidInfo.swhid).lines;
-    if (what === 'bibtex') return this.bibtexText(swhidInfo, lines, targetPath);
+    const lines = swhidInfo.swhid.qualifiers.lines;
+    if (what === 'bibtex') return this.bibtexText(swhidInfo, targetPath);
 
-    const swhid = bare ? bareSwhid(swhidInfo.core, lines) : swhidInfo.swhid;
+    // bare: without its context, but with its lines
+    const swhid = bare ? swhidInfo.core.qualify({ lines }) : swhidInfo.swhid;
     switch (what) {
       case 'link':
         return { text: browseUrl(archiveUrl(), swhid), label: bare ? 'permalink w/o context' : 'SWH archive permalink' };
@@ -170,22 +160,21 @@ export class SwhidCommands {
         return { text: markdownLink(targetPath, lines, browseUrl(archiveUrl(), swhid)), label: 'Markdown link to the SWH archive' };
       default:
         // not archived, open opens nothing and archived finds no version: the SWHID is copied instead
-        return { text: swhid, label: swhidLabel(bare, swhidInfo.archived && what === 'archived') };
+        return { text: swhid.toString(), label: swhidLabel(bare, swhidInfo.archived && what === 'archived') };
     }
   }
 
   /**
    * A BibTeX entry citing a SWHID, and a label saying what it cites.
    *
-   * @param swhidInfo - The SWHID to cite.
-   * @param lines - The cited lines, if any.
+   * @param swhidInfo - The SWHID to cite, with the cited lines, if any.
    * @param targetPath - The target's path, to find the repository whose metadata the entry uses.
    * @returns The entry, and its label for the messages.
    * @throws {@link core!UserError} when Git fails.
    */
-  private async bibtexText(swhidInfo: SwhidInfo, lines: Maybe<string>, targetPath: string): Promise<LabeledText> {
+  private async bibtexText(swhidInfo: SwhidInfo, targetPath: string): Promise<LabeledText> {
     const repoRoot = await this.ctx.swh.git.root(targetPath);
-    const [entry, why] = await bibtex(this.ctx.swh, swhidInfo, lines, repoRoot);
+    const [entry, why] = await bibtex(this.ctx.swh, swhidInfo, repoRoot);
     return { text: entry, label: citationWhat(why) };
   }
 
@@ -206,7 +195,7 @@ export class SwhidCommands {
       await this.swhidUnarchived(label, targetPath, swhidInfo.origin);
       return;
     }
-    const version = swhidInfo.version ? ` (version of commit ${shortHash(swhidInfo.version)})` : '';
+    const version = swhidInfo.version ? ` (version of commit ${swhidInfo.version.shortHash})` : '';
     info(`Copied ${label}${version}`);
   }
 

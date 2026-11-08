@@ -10,7 +10,8 @@
  */
 
 import type { TreeNode } from './backend';
-import { ancestors } from './swhid';
+import type { Swhid } from './swhid';
+import { ancestors } from './util';
 
 /**
  * The archival status of a scanned item.
@@ -28,7 +29,7 @@ export type ScanItem = {
   /** The name to show: the last path segment, with a trailing `/` for a directory; `"./"` for the root. */
   name: string;
   /** The core SWHID of the item as it is in the working tree. */
-  swhid: string;
+  swhid: Swhid;
   /** Whether the item is a directory. */
   dir: boolean;
   /** The item's archival status. */
@@ -100,8 +101,9 @@ function comparePaths(left: string, right: string): number {
  * one file under it is archived.
  *
  * @param nodes - The nodes of the tracked working tree, in any order, as
- * {@link Swh.tree} gives them.
+ * {@link Swh.tree} gives them; the root `"."` among them.
  * @returns The scan, whose root is `"."`.
+ * @throws `Error` when the nodes hold no root.
  */
 export function buildScan(nodes: TreeNode[]): Scan {
   const sorted = [...nodes].sort((left, right) => comparePaths(left.path, right.path));
@@ -134,7 +136,8 @@ export function buildScan(nodes: TreeNode[]): Scan {
     byPath.set(node.path, item);
     items.push(item);
   }
-  const root = byPath.get('.') ?? { path: '.', name: './', swhid: '', dir: true, status: 'not-archived', children: [] };
+  const root = byPath.get('.');
+  if (!root) throw new Error('A scan needs the root directory, "."');
   const dirs = items.filter((item) => item.dir);
   const all = counts.get('.') ?? [0, 0];
   return {

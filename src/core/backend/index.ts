@@ -29,7 +29,9 @@
 
 import { UserError } from '../errors';
 import { relativePath } from '../git';
-import { ancestors, core, isPublicOrigin, typeOf } from '../swhid';
+import { isPublicOrigin } from '../origin';
+import { Swhid } from '../swhid';
+import { ancestors } from '../util';
 import { forgetNegatives } from './memo';
 import { SwhSwhids } from './swhids';
 import type { TreeNode } from './types';
@@ -70,14 +72,14 @@ export class Swh extends SwhSwhids {
   async tree(root: string): Promise<TreeNode[]> {
     const tree = await this.worktreeTree(root);
     const lsTree = (await this.git.get(root, ['ls-tree', '-r', '-t', '-z', tree])) ?? '';
-    const nodes: TreeNode[] = [{ path: '.', swhid: core('dir', tree), dir: true, archived: false }];
+    const nodes: TreeNode[] = [{ path: '.', swhid: Swhid.of('dir', tree), dir: true, archived: false }];
     for (const line of lsTree.split('\0').filter(Boolean)) {
       // "<mode> <type> <hash>\t<path>", the path may hold tabs
       const tab = line.indexOf('\t');
       const [, type, hash] = line.substring(0, tab).split(' ');
       nodes.push({
         path: line.substring(tab + 1),
-        swhid: core(type === 'tree' ? 'dir' : type === 'blob' ? 'cnt' : 'rev', hash),
+        swhid: Swhid.of(type === 'tree' ? 'dir' : type === 'blob' ? 'cnt' : 'rev', hash),
         dir: type === 'tree',
         archived: false,
       });
@@ -85,7 +87,7 @@ export class Swh extends SwhSwhids {
     const swhids = new Map(nodes.map((node) => [node.path, node.swhid]));
     // a directory holds a submodule's commit, not the commit itself
     const covered = (node: TreeNode) =>
-      typeOf(node.swhid) !== 'rev' && ancestors(node.path).some((dir) => this.knownP(swhids.get(dir)!));
+      node.swhid.type !== 'rev' && ancestors(node.path).some((dir) => this.knownP(swhids.get(dir)!));
     // directories first: an archived one covers everything under it
     await this.rememberKnown(nodes.filter((node) => node.dir && !covered(node)).map((node) => node.swhid));
     await this.rememberKnown(nodes.filter((node) => !node.dir && !covered(node)).map((node) => node.swhid));

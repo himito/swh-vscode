@@ -13,7 +13,8 @@
 import * as path from 'path';
 import type { ArchiveApi, CitationAnswer, Swh, SwhidInfo } from './backend';
 import { UserError } from './errors';
-import { core, encodeOrigin, hashOf, isPublicOrigin, originName, qualifiers, shortHash, typeOf } from './swhid';
+import { isPublicOrigin, originName } from './origin';
+import { Swhid } from './swhid';
 import type { Maybe } from './types';
 
 /**
@@ -33,30 +34,21 @@ export type Why = 'archive' | 'no-metadata' | 'failed' | 'not-archived';
  * without a value are left out.
  *
  * @param answer - What the archive answered, see {@link ArchiveApi.citation}.
- * @param coreSwhid - The core SWHID cited.
- * @param swhid - The qualified SWHID cited, for the `swhid` field.
+ * @param swhid - The qualified SWHID cited, for the `swhid` field; its
+ * object type gives the entry's type, its hash and lines the key.
  * @param title - The title, e.g. the repository's name.
  * @param url - The repository's public URL.
  * @param date - The date of the cited version, ISO 8601; it gives the `date`
  * and `year` fields.
- * @param lines - The cited line range, `"A-B"` or `"A"`, if any.
  * @returns The entry, and where it comes from.
  *
  * @example
  * ```ts
- * citation('no-metadata', 'swh:1:cnt:94a9ed0…', swhid, 'repo', 'https://example.org/me/repo');
+ * citation('no-metadata', swhid, 'repo', 'https://example.org/me/repo');
  * // ['@codefragment{swh-cnt-94a9ed0,\n    title = {repo},\n    url = {…},\n    swhid = {…}\n}\n', 'no-metadata']
  * ```
  */
-export function citation(
-  answer: CitationAnswer,
-  coreSwhid: string,
-  swhid: string,
-  title?: string,
-  url?: string,
-  date?: string,
-  lines?: string,
-): [string, Why] {
+export function citation(answer: CitationAnswer, swhid: Swhid, title?: string, url?: string, date?: string): [string, Why] {
   if (typeof answer === 'object') return [answer.entry, 'archive'];
   const day = date?.substring(0, 10);
   const fields: Array<[string, Maybe<string>]> = [
@@ -64,12 +56,13 @@ export function citation(
     ['url', url],
     ['date', day],
     ['year', day?.substring(0, 4)],
-    ['swhid', swhid],
+    ['swhid', swhid.toString()],
   ];
   // the types the archive gives
-  const type = { cnt: 'codefragment', snp: 'software' }[typeOf(coreSwhid) as 'cnt' | 'snp'] ?? 'softwareversion';
+  const type = swhid.type === 'cnt' ? 'codefragment' : swhid.type === 'snp' ? 'software' : 'softwareversion';
   // as the archive makes it, e.g. swh-cnt-67c1849-L1-L3
-  const key = `swh-${typeOf(coreSwhid)}-${shortHash(coreSwhid)}${lines ? '-L' + lines.replace(/-/g, '-L') : ''}`;
+  const lines = swhid.qualifiers.lines;
+  const key = `swh-${swhid.type}-${swhid.shortHash}${lines ? '-L' + lines.replace(/-/g, '-L') : ''}`;
   const body = fields
     .filter(([, value]) => value)
     .map(([field, value]) => `    ${field} = {${value}}`)
@@ -87,30 +80,23 @@ export function citation(
  * a local one.
  *
  * @param swh - The backend.
- * @param info - The SWHID to cite, see {@link Swh.qualifiedSwhid}.
- * @param lines - The cited line range, `"A-B"` or `"A"`, if any.
+ * @param info - The SWHID to cite, see {@link Swh.qualifiedSwhid}; its
+ * `lines` qualifier, if any, gives the cited lines.
  * @param root - The root of the repository holding it, if any.
  * @returns The entry, and where it comes from.
  * @throws {@link UserError} when the archive cannot be reached, or its rate
  * limit is reached.
  */
-export async function bibtex(swh: Swh, info: SwhidInfo, lines: Maybe<string>, root: Maybe<string>): Promise<[string, Why]> {
-  const answer: CitationAnswer = info.archived ? await swh.archive.citation({ swhid: info.swhid }) : 'not-archived';
+export async function bibtex(swh: Swh, info: SwhidInfo, root: Maybe<string>): Promise<[string, Why]> {
+  const answer: CitationAnswer = info.archived ? await swh.archive.citation({ swhid: info.swhid.toString() }) : 'not-archived';
   const origin = info.origin;
-  const anchor = qualifiers(info.swhid).anchor;
+  const anchor = info.swhid.qualifiers.anchor;
   const date =
     anchor && root && typeof answer !== 'object'
-      ? await swh.git.get(root, ['show', '-s', '--no-show-signature', '--format=%cs', hashOf(anchor)])
+      ? await swh.git.get(root, ['show', '-s', '--no-show-signature', '--format=%cs', anchor.hash])
       : undefined;
-  return citation(
-    answer,
-    info.core,
-    info.swhid,
-    origin ? originName(origin) : root ? path.basename(root) : undefined,
-    isPublicOrigin(origin) ? origin : undefined,
-    date,
-    lines,
-  );
+  const title = origin ? originName(origin) : root ? path.basename(root) : undefined;
+  return citation(answer, info.swhid, title, isPublicOrigin(origin) ? origin : undefined, date);
 }
 
 /**
@@ -127,9 +113,9 @@ export async function originBibtex(swh: Swh, origin: string): Promise<[string, W
   const info = await swh.originStatus(origin);
   if (!info.archived || !info.snapshot) throw new UserError(`Software Heritage has not archived ${origin}`);
   const url = info.origin;
-  const snapshotSwhid = core('snp', info.snapshot);
+  const snapshot = Swhid.of('snp', info.snapshot).qualify({ origin: url });
   const answer = await swh.archive.citation({ origin: url });
-  return citation(answer, snapshotSwhid, `${snapshotSwhid};origin=${encodeOrigin(url)}`, originName(url), url, info.date);
+  return citation(answer, snapshot, originName(url), url, info.date);
 }
 
 /**

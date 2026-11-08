@@ -47,7 +47,7 @@ export type LatestVisit =
 /** What a citation is asked for: a SWHID, or an origin's latest snapshot. */
 export type CitationTarget =
   | {
-      /** The SWHID to cite, qualified or not. */
+      /** The SWHID to cite, qualified or not, as its canonical text. */
       swhid: string;
     }
   | {
@@ -79,9 +79,10 @@ export interface ArchiveApi {
   /**
    * Which SWHIDs the archive holds.
    *
-   * @param swhids - Core SWHIDs, as many as needed.
-   * @returns Whether the archive holds each SWHID it answered about; a SWHID
-   * it did not answer about is missing.
+   * @param swhids - Core SWHIDs as their canonical text (see `Swhid.toString`),
+   * as many as needed.
+   * @returns Whether the archive holds each SWHID it answered about, by the
+   * same text; a SWHID it did not answer about is missing.
    */
   known(swhids: readonly string[]): Promise<Map<string, boolean>>;
 
