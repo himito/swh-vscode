@@ -204,7 +204,7 @@ To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce 
     ├── json.test.ts         Unit tests: the archive's JSON answers, mapped
     ├── memo.test.ts         Unit tests: the memo's policies and stale answers, with a fake clock
     ├── fakeArchive.test.ts  Unit tests: the client on a fake ArchiveApi, without HTTP
-    ├── repository.test.ts   Unit tests: the client on a temporary repository, fetch mocked
+    ├── repository.test.ts   Unit tests: the client on a temporary repository, and its HTTP adapter (batches, citations, rate limit), fetch mocked
     └── smoke/               Smoke test in a real VS Code
         ├── run.ts           Downloads VS Code and opens it on a temporary repository
         └── suite.ts         Runs the commands in the extension host

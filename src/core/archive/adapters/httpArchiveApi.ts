@@ -11,9 +11,9 @@
  * @packageDocumentation
  */
 
+import { pathOrigin } from '#core/origin';
 import { baseUrl, type Maybe, now, partition, queryString, UserError } from '#core/shared';
 import { headerNumber, is2xx, NOT_JSON, type RequestHeaders, type Resp, retrieve } from './http';
-import { pathOrigin } from '#core/origin';
 import { type ArchiveApi, type CitationTarget, type KnownAnswers, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from '../archiveApi';
 import type { CitationAnswer, SaveRequest, Token, Visit } from '../types';
 import { toCitationEntry, toKnown, toSaveRequest, toVisit, toVisits } from './json';
@@ -41,6 +41,25 @@ const CITATION_PARAMETERS = {
  * what was asked for, rather than failing to make an entry.
  */
 const NO_METADATA_STATUSES: ReadonlySet<number> = new Set([400, 404]);
+
+/** The HTTP methods the Web API is asked with. */
+type HttpMethod = 'GET' | 'POST';
+
+/** The headers in which the archive tells its rate limit. */
+const RATE_LIMIT_HEADERS = {
+  /** The requests allowed per window. */
+  limit: 'X-RateLimit-Limit',
+  /** The requests left in the current window. */
+  remaining: 'X-RateLimit-Remaining',
+  /** When the window ends, in epoch seconds. */
+  reset: 'X-RateLimit-Reset',
+} as const;
+
+/** The length of a rate limit window, in seconds: when the archive does not tell when it ends. */
+const RATE_LIMIT_WINDOW = 3600;
+
+/** The HTTP status of an answer that says the rate limit is reached. */
+const TOO_MANY_REQUESTS = 429;
 
 /** The media type of JSON, which the Web API answers in and is sent. */
 const JSON_MEDIA_TYPE = 'application/json';
@@ -248,7 +267,7 @@ export class HttpArchiveApi implements ArchiveApi {
    *
    * @remarks
    * A request without a token counts against the tokenless rate limit, which
-   * is then read from the answer's headers.
+   * is then read from the answer's headers (see `followRateLimit`).
    *
    * @param method - The HTTP method.
    * @param apiPath - The API path, e.g. `/known/`.
@@ -257,30 +276,69 @@ export class HttpArchiveApi implements ArchiveApi {
    * @throws {@link UserError} when the archive cannot be reached, or when the
    * rate limit is reached.
    */
-  private async request(method: string, apiPath: string, body?: string): Promise<Resp> {
+  private async request(method: HttpMethod, apiPath: string, body?: string): Promise<Resp> {
     const headers = await this.headers(body);
+
     const resp = await retrieve(method, this.apiUrl(apiPath), body, headers, TIMEOUT);
     if (!resp) throw new UserError(`Cannot reach the Software Heritage archive at ${this.deps.archiveUrl()}`);
-    if (headers.Authorization) this.forgetRateLimit();
-    else this.trackRateLimit(resp);
-    if (resp.status === 429) throw new UserError(`${RATE_LIMIT_MESSAGE}; retry in ${resp.retryAfter ?? 'a few'} seconds`);
+
+    this.followRateLimit(resp, 'Authorization' in headers);
+    if (resp.status === TOO_MANY_REQUESTS) throw HttpArchiveApi.rateLimitReached(resp);
+
     return resp;
   }
 
   /**
-   * Reads the tokenless rate limit from an answer's `X-RateLimit-*` headers.
+   * Keeps the tokenless rate limit up to date after a request.
+   *
+   * @param resp - The answer.
+   * @param withToken - Whether the request was made with a token: the
+   * tokenless rate limit then no longer applies, and is forgotten.
+   */
+  private followRateLimit(resp: Resp, withToken: boolean): void {
+    if (withToken) this.forgetRateLimit();
+    else this.trackRateLimit(resp);
+  }
+
+  /**
+   * The error for an answer that says the rate limit is reached.
+   *
+   * @param resp - The answer, an HTTP 429.
+   * @returns The error, starting with {@link RATE_LIMIT_MESSAGE}, and saying
+   * when to retry, as the archive tells it, else in a few seconds.
+   */
+  private static rateLimitReached(resp: Resp): UserError {
+    const wait = resp.retryAfter ?? 'a few';
+    return new UserError(`${RATE_LIMIT_MESSAGE}; retry in ${wait} seconds`);
+  }
+
+  /**
+   * Keeps the tokenless rate limit an answer gives, when it gives one.
    *
    * @param resp - The answer to a request without a token.
    */
   private trackRateLimit(resp: Resp): void {
-    const limit = headerNumber(resp.headers, 'X-RateLimit-Limit');
-    const remaining = headerNumber(resp.headers, 'X-RateLimit-Remaining');
-    if (limit === undefined || remaining === undefined) return;
-    this.lastRateLimit = {
-      api: this.apiUrl(''),
-      limit: { used: limit - remaining, limit, reset: headerNumber(resp.headers, 'X-RateLimit-Reset') ?? now() + 3600 },
-    };
+    const limit = HttpArchiveApi.rateLimitOf(resp.headers);
+    if (!limit) return;
+    this.lastRateLimit = { api: this.apiUrl(''), limit };
     this.deps.onRateLimit?.();
+  }
+
+  /**
+   * Reads the rate limit from an answer's `X-RateLimit-*` headers.
+   *
+   * @param headers - The answer's headers.
+   * @returns The requests used and allowed, and when the window ends; without
+   * a reset time, in `RATE_LIMIT_WINDOW` seconds. `undefined` when the
+   * answer does not tell the limit and the requests remaining.
+   */
+  private static rateLimitOf(headers: Headers): Maybe<RateLimit> {
+    const limit = headerNumber(headers, RATE_LIMIT_HEADERS.limit);
+    const remaining = headerNumber(headers, RATE_LIMIT_HEADERS.remaining);
+    if (limit === undefined || remaining === undefined) return undefined;
+
+    const reset = headerNumber(headers, RATE_LIMIT_HEADERS.reset) ?? now() + RATE_LIMIT_WINDOW;
+    return { used: limit - remaining, limit, reset };
   }
 
   /**

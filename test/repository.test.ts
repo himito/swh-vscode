@@ -1,11 +1,14 @@
 /**
- * Tests of the client on a real Git repository with a fake archive.
+ * Tests of the client on a real Git repository, and of its HTTP adapter,
+ * both on a fake archive.
  *
  * @remarks
  * One temporary repository serves the whole file, and `globalThis.fetch` is
  * replaced with a fake Software Heritage archive. It answers the `/known/`,
- * latest visit and save requests from {@link archived} and {@link origins}.
- * No network is needed. Run them with `npm test`.
+ * latest visit and save requests from {@link archived} and {@link origins},
+ * and the citation requests with {@link citationReply}, which a test sets to
+ * any status, body and headers, e.g. a 429 or rate limit headers. No
+ * network is needed. Run them with `npm test`.
  *
  * @packageDocumentation
  */
@@ -16,7 +19,7 @@ import { execFileSync } from 'child_process';
 import { promises as fs, realpathSync, mkdtempSync, writeFileSync, mkdirSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Git, HttpArchiveApi, KNOWN_BATCH_SIZE, LineRange, Swh, Swhid } from '#core';
+import { Git, HttpArchiveApi, KNOWN_BATCH_SIZE, LineRange, RATE_LIMIT_MESSAGE, Swh, Swhid, UserError } from '#core';
 
 /** The temporary Git repository the tests run on, created before them. */
 let dir: string;
@@ -37,8 +40,8 @@ let origins = new Set<string>();
 let asked: string[][] = [];
 /** Every request the fake archive received, as `METHOD URL`. */
 let requests: string[] = [];
-/** How the fake archive answers a citation request: its status and body. */
-let citationReply: [number, unknown] = [404, {}];
+/** How the fake archive answers a citation request: its status, body and headers. */
+let citationReply: [number, unknown, Record<string, string>?] = [404, {}];
 /** The real `fetch`, put back after the tests. */
 const realFetch = globalThis.fetch;
 
@@ -289,6 +292,36 @@ test('citations: the request, and the answer', async () => {
   assert.equal(await archive.citation({ swhid }), 'failed');
   citationReply = [200, { other: 'no entry' }];
   assert.equal(await archive.citation({ swhid }), 'failed');
+});
+
+// The rate limit reached is an error the user can act on: it says when to
+// retry, as the archive tells it, and starts with RATE_LIMIT_MESSAGE.
+test('the rate limit reached', async () => {
+  reset();
+  const archive = new HttpArchiveApi({ archiveUrl: () => 'https://archive.example.org', token: async () => undefined });
+  const swhid = 'swh:1:cnt:' + '0'.repeat(40);
+  citationReply = [429, {}, { 'Retry-After': '30' }];
+  await assert.rejects(archive.citation({ swhid }), (error) => error instanceof UserError && error.message === `${RATE_LIMIT_MESSAGE}; retry in 30 seconds`);
+  citationReply = [429, {}];
+  await assert.rejects(archive.citation({ swhid }), (error) => error instanceof UserError && error.message === `${RATE_LIMIT_MESSAGE}; retry in a few seconds`);
+});
+
+// The rate limit is read from the answer's X-RateLimit-* headers; without a
+// reset time, its window ends in an hour; without them, it is left as it was.
+test('the rate limit, from the headers', async () => {
+  reset();
+  const archive = new HttpArchiveApi({ archiveUrl: () => 'https://archive.example.org', token: async () => undefined });
+  const swhid = 'swh:1:cnt:' + '0'.repeat(40);
+  const before = Date.now() / 1000;
+  citationReply = [200, { content: '@x{}' }, { 'X-RateLimit-Limit': '120', 'X-RateLimit-Remaining': '119' }];
+  await archive.citation({ swhid });
+  const limit = archive.rateLimit()!;
+  assert.deepEqual([limit.used, limit.limit], [1, 120]);
+  assert.ok(limit.reset >= before + 3600 && limit.reset <= Date.now() / 1000 + 3600, 'an hour from now');
+
+  citationReply = [200, { content: '@x{}' }, { 'X-RateLimit-Limit': '120' }];
+  await archive.citation({ swhid });
+  assert.deepEqual(archive.rateLimit(), limit);
 });
 
 // The tokenless rate limit is shown only while it applies: not once a token
