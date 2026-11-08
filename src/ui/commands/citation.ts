@@ -7,7 +7,7 @@
 import * as vscode from 'vscode';
 import { citationWhat, type Maybe, originBibtex } from '#core';
 import { busy, fileEditor, info } from '../helpers';
-import type { CommandArg, CommandContext } from './context';
+import type { CommandInput, CommandContext } from './context';
 import type { SwhidCommands } from './swhid';
 
 /** Implements the citation commands. */
@@ -35,14 +35,14 @@ export class CitationCommands {
    * its latest snapshot.
    *
    * @param askOrigin - Whether to ask for another repository's URL; `false` by default.
-   * @param arg - The command's argument: the file or folder to cite, if any.
+   * @param input - What the command was run with: the file or folder to cite, if any.
    * @throws {@link core!Cancelled} when the user dismisses the prompt.
    * @throws {@link core!UserError} when there is nothing to cite, the repository
    * asked for is not archived, or the archive cannot be reached.
    */
-  async cite(askOrigin = false, arg?: CommandArg): Promise<void> {
-    const origin = await this.citedOrigin(askOrigin, arg);
-    const entry = origin ? await this.citeOrigin(origin) : await this.swhid.swhidCopy('bibtex', arg);
+  async cite(askOrigin = false, input?: CommandInput): Promise<void> {
+    const origin = await this.citedOrigin(askOrigin, input);
+    const entry = origin ? await this.citeOrigin(origin) : await this.swhid.swhidCopy('bibtex', input);
     await this.ctx.reports.show('swh cite.bib', entry);
   }
 
@@ -50,13 +50,13 @@ export class CitationCommands {
    * The repository a citation is about, when it is not a file or folder.
    *
    * @param askOrigin - Whether to ask for another repository's URL.
-   * @param arg - The command's argument: the file or folder to cite, if any.
+   * @param input - What the command was run with: the file or folder to cite, if any.
    * @returns The repository URL to cite, or `undefined` to cite the file,
    * selection or directory instead.
    * @throws {@link core!Cancelled} when the user dismisses the prompt.
    */
-  private async citedOrigin(askOrigin: boolean, arg: CommandArg): Promise<Maybe<string>> {
-    const hasFileToCite = Boolean(fileEditor() || this.ctx.uriOf(arg));
+  private async citedOrigin(askOrigin: boolean, input: CommandInput): Promise<Maybe<string>> {
+    const hasFileToCite = Boolean(fileEditor() || this.ctx.uriOf(input));
     if (hasFileToCite && !askOrigin) return undefined;
     return this.ctx.originArg('cite', askOrigin);
   }

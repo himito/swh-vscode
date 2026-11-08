@@ -260,12 +260,12 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
   /**
    * The item an action is about.
    *
-   * @param arg - The item the action was run on, when run from its context menu or inline.
-   * @returns `arg`, else the item selected in the view.
+   * @param clicked - The item the action was run on, when run from its context menu or inline.
+   * @returns `clicked`, else the item selected in the view.
    * @throws {@link core!UserError} when no item is given or selected.
    */
-  private item(arg?: ScanItem): ScanItem {
-    const item = arg ?? this.view.selection[0];
+  private actionItem(clicked?: ScanItem): ScanItem {
+    const item = clicked ?? this.view.selection[0];
     if (!item) throw new UserError('No file or directory selected');
     return item;
   }
@@ -273,11 +273,11 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
   /**
    * Open a file of the scan in an editor; do nothing for a directory or a submodule.
    *
-   * @param arg - The item to open, else the selected one.
+   * @param clicked - The item to open, else the selected one.
    * @throws {@link core!UserError} when no item is given or selected.
    */
-  async openFile(arg?: ScanItem) {
-    const item = this.item(arg);
+  async openFile(clicked?: ScanItem) {
+    const item = this.actionItem(clicked);
     if (item.dir || typeOf(item.swhid) === 'rev' || !this.root) return;
     await vscode.window.showTextDocument(vscode.Uri.file(path.join(this.root, item.path)), { preview: true });
   }
@@ -285,21 +285,21 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
   /**
    * Open an item in the archive's web interface, by its core SWHID.
    *
-   * @param arg - The item to open, else the selected one.
+   * @param clicked - The item to open, else the selected one.
    * @throws {@link core!UserError} when no item is given or selected.
    */
-  async openInArchive(arg?: ScanItem) {
-    await openUrl(browseUrl(archiveUrl(), this.item(arg).swhid));
+  async openInArchive(clicked?: ScanItem) {
+    await openUrl(browseUrl(archiveUrl(), this.actionItem(clicked).swhid));
   }
 
   /**
    * Copy the core SWHID of an item to the clipboard.
    *
-   * @param arg - The item whose SWHID to copy, else the selected one.
+   * @param clicked - The item whose SWHID to copy, else the selected one.
    * @throws {@link core!UserError} when no item is given or selected.
    */
-  async copySwhid(arg?: ScanItem) {
-    const swhid = this.item(arg).swhid;
+  async copySwhid(clicked?: ScanItem) {
+    const swhid = this.actionItem(clicked).swhid;
     await vscode.env.clipboard.writeText(swhid);
     info(`Copied ${shortSwhid(swhid)}`);
   }

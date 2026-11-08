@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { bibtex, browseUrl, citationWhat, isPublicOrigin, type Maybe, normalizeOrigin, qualifiers, shortHash, type SwhidInfo } from '#core';
 import { archiveUrl, ask, busy, info, openUrl } from '../helpers';
 import type { ArchiveCommands } from './archive';
-import type { CommandArg, CommandContext, Target } from './context';
+import type { CommandInput, CommandContext, Target } from './context';
 
 /**
  * What a SWHID command produces.
@@ -111,15 +111,15 @@ export class SwhidCommands {
    * dropped when the archived version differs from the working tree's.
    *
    * @param what - What to produce.
-   * @param arg - The command's argument: the target, or the `bare` option.
+   * @param input - What the command was run with: the target, or the `bare` option.
    * @returns The text copied or opened.
    * @throws {@link core!UserError} when there is no target, it is not a local file,
    * the user declines to save a modified file, Git fails, or a save request
    * the user accepts fails.
    */
-  async swhidCopy(what: What, arg?: CommandArg): Promise<string> {
-    const bare = this.ctx.bare(arg);
-    const target = await this.ctx.target(this.ctx.uriOf(arg));
+  async swhidCopy(what: What, input?: CommandInput): Promise<string> {
+    const bare = this.ctx.bare(input);
+    const target = await this.ctx.target(this.ctx.uriOf(input));
     const { swhidInfo, text, label } = await busy('Software Heritage: computing the SWHID…', () =>
       this.computeSwhidText(target, { what, bare, targetPath: target.path }),
     );

@@ -18,7 +18,7 @@ import { Git, HttpArchiveApi, type Maybe, type ScanItem, Swh } from '#core';
 import {
   ApiToken,
   archiveUrl,
-  CommandArg,
+  CommandInput,
   Commands,
   config,
   envToken,
@@ -77,12 +77,12 @@ export function activate(context: vscode.ExtensionContext) {
     'swh.refresh': () => commands.archive.refresh(),
 
     // SWHIDs and citations: a Uri from a context menu, or options from a keybinding or the menu
-    'swh.swhidCopy': (arg?: CommandArg) => commands.swhid.swhidCopy('swhid', arg),
-    'swh.swhidCopyArchived': (arg?: CommandArg) => commands.swhid.swhidCopy('archived', arg),
-    'swh.swhidCopyLink': (arg?: CommandArg) => commands.swhid.swhidCopy('link', arg),
-    'swh.swhidCopyMarkdown': (arg?: CommandArg) => commands.swhid.swhidCopy('markdown', arg),
-    'swh.swhidOpen': (arg?: CommandArg) => commands.swhid.swhidCopy('open', arg),
-    'swh.cite': (arg?: CommandArg) => commands.citation.cite(false, arg),
+    'swh.swhidCopy': (input?: CommandInput) => commands.swhid.swhidCopy('swhid', input),
+    'swh.swhidCopyArchived': (input?: CommandInput) => commands.swhid.swhidCopy('archived', input),
+    'swh.swhidCopyLink': (input?: CommandInput) => commands.swhid.swhidCopy('link', input),
+    'swh.swhidCopyMarkdown': (input?: CommandInput) => commands.swhid.swhidCopy('markdown', input),
+    'swh.swhidOpen': (input?: CommandInput) => commands.swhid.swhidCopy('open', input),
+    'swh.cite': (input?: CommandInput) => commands.citation.cite(false, input),
     'swh.citeOther': () => commands.citation.cite(true),
     'swh.openSwhid': (swhid?: string) => commands.misc.openSwhid(swhid),
     'swh.statusBarCopy': () => copyStatusBarSwhid(commands.swhid, statusBar),
@@ -125,7 +125,7 @@ async function copyStatusBarSwhid(swhid: SwhidCommands, statusBar: Maybe<StatusB
   const shown = statusBar?.current;
   if (!shown) return;
 
-  const target: CommandArg = shown.dir ? { path: shown.path } : undefined;
+  const target: CommandInput = shown.dir ? { path: shown.path } : undefined;
   await swhid.swhidCopy('swhid', target);
 }
 

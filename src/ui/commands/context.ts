@@ -31,14 +31,14 @@ export type CommandOptions = {
 };
 
 /**
- * The argument a SWHID command receives.
+ * What a SWHID command is run with.
  *
  * @remarks
  * A `Uri` when run from the editor's or the Explorer's context menu;
  * {@link CommandOptions} from a keybinding, the menus, or the status bar item;
  * `undefined` from the Command Palette.
  */
-export type CommandArg = vscode.Uri | CommandOptions | undefined;
+export type CommandInput = vscode.Uri | CommandOptions | undefined;
 
 /** What a SWHID command is about: a file, possibly some of its lines, or a directory. */
 export type Target = {
@@ -257,22 +257,22 @@ export class CommandContext {
   /**
    * Whether a SWHID command gives the bare SWHID, without its context.
    *
-   * @param arg - The command's argument; its `bare` option wins.
+   * @param input - What the command was run with; its `bare` option wins.
    * @returns The `bare` option when given, else the `swh.swhidWithoutContext` setting.
    */
-  bare(arg: CommandArg): boolean {
-    if (arg && !(arg instanceof vscode.Uri) && typeof arg.bare === 'boolean') return arg.bare;
+  bare(input: CommandInput): boolean {
+    if (input && !(input instanceof vscode.Uri) && typeof input.bare === 'boolean') return input.bare;
     return withoutContext();
   }
 
   /**
-   * The file or folder a command's argument names, if any.
+   * The file or folder a command was run on, if any.
    *
-   * @param arg - The command's argument.
+   * @param input - What the command was run with.
    * @returns The `Uri` from a context menu, the `path` option, or `undefined`.
    */
-  uriOf(arg: CommandArg): vscode.Uri | string | undefined {
-    if (arg instanceof vscode.Uri) return arg;
-    return arg?.path;
+  uriOf(input: CommandInput): vscode.Uri | string | undefined {
+    if (input instanceof vscode.Uri) return input;
+    return input?.path;
   }
 }
