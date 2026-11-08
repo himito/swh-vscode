@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { bibtex, browseUrl, citationWhat, isPublicOrigin, type LineRange, type Maybe, normalizeOrigin, type SwhidInfo } from '#core';
+import { browseUrl, isPublicOrigin, type LineRange, type Maybe, normalizeOrigin, type SwhidInfo } from '#core';
 import { archiveUrl, ask, busy, info, openUrl } from '../helpers';
 import type { ArchiveCommands } from './archive';
 import type { CommandInput, CommandContext, Target } from './context';
@@ -165,17 +165,18 @@ export class SwhidCommands {
   }
 
   /**
-   * A BibTeX entry citing a SWHID, and a label saying what it cites.
+   * A BibTeX entry citing a SWHID, and a label saying where it comes from.
    *
    * @param swhidInfo - The SWHID to cite, with the cited lines, if any.
    * @param targetPath - The target's path, to find the repository whose metadata the entry uses.
-   * @returns The entry, and its label for the messages.
-   * @throws {@link core!UserError} when Git fails.
+   * @returns The entry, and its label for the messages, e.g. "the archive's BibTeX entry".
+   * @throws {@link core!UserError} as {@link core!Citer.cite} does: when the
+   * archive cannot be reached, or its rate limit is reached.
    */
   private async bibtexText(swhidInfo: SwhidInfo, targetPath: string): Promise<LabeledText> {
     const repoRoot = await this.ctx.swh.git.root(targetPath);
-    const { entry, why } = await bibtex(this.ctx.swh, swhidInfo, repoRoot);
-    return { text: entry, label: citationWhat(why) };
+    const citation = await this.ctx.citer.cite(swhidInfo, repoRoot);
+    return { text: citation.entry, label: citation.description };
   }
 
   /**

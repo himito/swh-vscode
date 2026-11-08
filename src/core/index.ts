@@ -11,7 +11,9 @@
  */
 
 export * from './backend';
+export * from './bibtex';
 export * from './citation';
+export * from './citer';
 export * from './encoding';
 export * from './errors';
 export * from './git';

@@ -5,7 +5,7 @@
  */
 
 import * as vscode from 'vscode';
-import { citationWhat, type Maybe, originBibtex } from '#core';
+import type { Maybe } from '#core';
 import { busy, fileEditor, info } from '../helpers';
 import type { CommandInput, CommandContext } from './context';
 import type { SwhidCommands } from './swhid';
@@ -67,13 +67,14 @@ export class CitationCommands {
    *
    * @param origin - The repository's public URL.
    * @returns The entry.
-   * @throws {@link core!UserError} when the repository is not archived, or the
-   * archive cannot be reached.
+   * @throws {@link core!UserError} as {@link core!Citer.citeOrigin} does: when
+   * the repository is not archived or has no snapshot to cite, or the archive
+   * cannot be reached or its rate limit is reached.
    */
   private async citeOrigin(origin: string): Promise<string> {
-    const { entry, why } = await busy('Software Heritage: making the citation…', () => originBibtex(this.ctx.swh, origin));
-    await vscode.env.clipboard.writeText(entry);
-    info(`Copied ${citationWhat(why)} for ${origin}`);
-    return entry;
+    const citation = await busy('Software Heritage: making the citation…', () => this.ctx.citer.citeOrigin(origin));
+    await vscode.env.clipboard.writeText(citation.entry);
+    info(`Copied ${citation.description} for ${origin}`);
+    return citation.entry;
   }
 }

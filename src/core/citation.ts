@@ -1,22 +1,21 @@
 /**
- * BibTeX citations of archived code.
+ * Citations of archived code, as the {@link Citation} value object.
  *
  * @remarks
  * The archive makes a BibTeX entry from the repository's `codemeta.json` or
  * `CITATION.cff`. When it has no such metadata, or the code is not
- * archived, a minimal entry is made here from what is known: title, URL,
- * date and SWHID. Each function gives a {@link Citation}: the entry, and
- * where it comes from. This module must not import `vscode`.
+ * archived, a minimal entry is made here, as the archive would make it,
+ * from what is known: title, URL, date and SWHID. Gathering what is known
+ * is {@link Citer}'s; writing BibTeX is {@link BibtexEntry}'s.
+ *
+ * Everything here is pure. This module must not import `vscode`.
  *
  * @packageDocumentation
  */
 
-import * as path from 'path';
-import type { ArchiveApi, CitationAnswer, OriginInfo, Swh, SwhidInfo } from './backend';
-import { UserError } from './errors';
-import type { Git } from './git';
-import { isPublicOrigin, originName } from './origin';
-import { type LineRange, type ObjectType, Swhid } from './swhid';
+import type { ArchiveApi, CitationAnswer } from './backend';
+import { BibtexEntry } from './bibtex';
+import type { LineRange, ObjectType, Swhid } from './swhid';
 import type { Maybe } from './types';
 
 /**
@@ -25,13 +24,8 @@ import type { Maybe } from './types';
  */
 export type Why = 'archive' | 'no-metadata' | 'failed' | 'not-archived';
 
-/** A BibTeX entry, and where it comes from. */
-export type Citation = {
-  /** The entry. */
-  entry: string;
-  /** Where it comes from: the archive, or why it is a minimal one. */
-  why: Why;
-};
+/** Why an entry is a minimal one: every {@link Why} but the archive's own. */
+export type MinimalWhy = Exclude<Why, 'archive'>;
 
 /** What a minimal entry says of the code it cites, besides its SWHID; each field is left out when missing. */
 export type CitationMetadata = {
@@ -57,263 +51,12 @@ const ENTRY_TYPES = {
 } as const satisfies Record<ObjectType, string>;
 
 /**
- * The part of a citation key that gives the cited lines, as the archive makes it.
- *
- * @param lines - The cited lines, if any.
- * @returns E.g. `-L1-L3`, or `-L5` for one line; `""` without lines.
- */
-function linesKey(lines: Maybe<LineRange>): string {
-  if (!lines) return '';
-  return lines.isSingle ? `-L${lines.first}` : `-L${lines.first}-L${lines.last}`;
-}
-
-/**
- * The key of a minimal entry, as the archive makes it.
- *
- * @param swhid - The SWHID cited.
- * @returns E.g. `swh-cnt-67c1849-L1-L3`: its object type, its short hash, its lines.
- */
-const citationKey = (swhid: Swhid) => `swh-${swhid.type}-${swhid.shortHash}${linesKey(swhid.qualifiers.lines)}`;
-
-/**
- * How LaTeX's special characters are written in text, so that they show as they are.
- *
- * @remarks
- * Braces are written with commands, not as `\{` and `\}`: BibTeX counts a
- * brace even after a backslash, and an unbalanced one breaks the whole entry.
- */
-const LATEX_SPECIALS: Readonly<Record<string, string>> = {
-  '\\': '\\textbackslash{}',
-  '{': '\\textbraceleft{}',
-  '}': '\\textbraceright{}',
-  '#': '\\#',
-  $: '\\$',
-  '%': '\\%',
-  '&': '\\&',
-  _: '\\_',
-  '^': '\\textasciicircum{}',
-  '~': '\\textasciitilde{}',
-};
-
-/** The characters of {@link LATEX_SPECIALS}. */
-const LATEX_SPECIAL = /[\\{}#$%&_^~]/g;
-
-/**
- * Writes text for a BibTeX field that LaTeX typesets, such as a title.
- *
- * @param text - The text, e.g. a repository's name.
- * @returns `text` with LaTeX's special characters escaped, e.g. `my\_repo`.
- */
-const latexText = (text: string) => text.replace(LATEX_SPECIAL, (char) => LATEX_SPECIALS[char]);
-
-/**
- * Writes a URL or a SWHID for a BibTeX field that is taken verbatim, such as `url`.
- *
- * @remarks
- * Only its braces are encoded, as `%7B` and `%7D`: BibTeX needs them
- * balanced, and the URL, or the SWHID once its qualifiers are decoded, is
- * the same.
- *
- * @param text - The URL or SWHID.
- * @returns `text` without braces.
- */
-const verbatimText = (text: string) => text.replace(/[{}]/g, (brace) => (brace === '{' ? '%7B' : '%7D'));
-
-/**
- * The fields of a BibTeX entry, by name, in the order they are written.
- *
- * @remarks
- * An object keeps its string keys in the order they were added, which is
- * the order of the entry's fields.
- */
-type BibtexFields = { readonly [name: string]: Maybe<string> };
-
-/**
- * Writes a BibTeX entry.
- *
- * @param type - The entry type, e.g. `software`.
- * @param key - The citation key.
- * @param fields - The fields, in the order to write them; those without a value are left out.
- * @returns The entry, ending with a newline.
- */
-function bibtexEntry(type: string, key: string, fields: BibtexFields): string {
-  const body = Object.entries(fields)
-    .filter(([, value]) => value)
-    .map(([name, value]) => `    ${name} = {${value}}`)
-    .join(',\n');
-  return `@${type}{${key},\n${body}\n}\n`;
-}
-
-/**
- * Makes the BibTeX entry citing a qualified SWHID.
- *
- * @remarks
- * When the archive gave an entry, it is used as is. Otherwise a minimal one
- * is made, of the type the archive would give (`@codefragment` for a file's
- * content, `@software` for a snapshot, `@softwareversion` otherwise), with a
- * key made as the archive makes it, e.g. `swh-cnt-67c1849-L1-L3` (see
- * `ENTRY_TYPES` and `citationKey`). Fields without a value are left out.
- * The title is escaped for LaTeX, which typesets it (see `latexText`); the
- * URL and the SWHID, taken verbatim, only lose their braces (see
- * `verbatimText`): an unbalanced brace would break the whole entry.
- *
- * @param answer - What the archive answered, see {@link ArchiveApi.citation}.
- * @param swhid - The qualified SWHID cited, for the `swhid` field; its
- * object type gives the entry's type, its hash and lines the key.
- * @param metadata - What else the minimal entry says: title, URL, date.
- * @returns The entry, and where it comes from.
- *
- * @example
- * ```ts
- * citation('no-metadata', swhid, { title: 'repo', url: 'https://example.org/me/repo' });
- * // { entry: '@codefragment{swh-cnt-94a9ed0,\n    title = {repo},\n    url = {…},\n    swhid = {…}\n}\n', why: 'no-metadata' }
- * ```
- */
-export function citation(answer: CitationAnswer, swhid: Swhid, metadata: CitationMetadata = {}): Citation {
-  if (typeof answer === 'object') return { entry: answer.entry, why: 'archive' };
-
-  const day = metadata.date?.substring(0, 10);
-  const entry = bibtexEntry(ENTRY_TYPES[swhid.type], citationKey(swhid), {
-    title: metadata.title && latexText(metadata.title),
-    url: metadata.url && verbatimText(metadata.url),
-    date: day,
-    year: day?.substring(0, 4),
-    swhid: verbatimText(swhid.toString()),
-  });
-  return { entry, why: answer };
-}
-
-/**
- * Makes the BibTeX entry citing a file, its lines, or a directory.
- *
- * @remarks
- * The archive is asked only when it holds the SWHID. For a minimal entry,
- * the title is the origin's name (else the repository directory's), the URL
- * the origin when public, and the date that of the anchor, when it is a
- * commit the repository has.
- *
- * @param swh - The backend.
- * @param info - The SWHID to cite, see {@link Swh.qualifiedSwhid}; its
- * `lines` qualifier, if any, gives the cited lines.
- * @param root - The root of the repository holding it, if any.
- * @returns The entry, and where it comes from.
- * @throws {@link UserError} when the archive cannot be reached, or its rate
- * limit is reached.
- */
-export async function bibtex(swh: Swh, info: SwhidInfo, root: Maybe<string>): Promise<Citation> {
-  const answer = await archiveCitation(swh, info);
-  // the archive's own entry needs nothing from the repository
-  if (typeof answer === 'object') return citation(answer, info.swhid);
-  return citation(answer, info.swhid, await repositoryMetadata(swh.git, info, root));
-}
-
-/**
- * What the archive answers to a citation request for a SWHID.
- *
- * @param swh - The backend.
- * @param info - The SWHID to cite.
- * @returns The archive's answer; `'not-archived'`, without asking, when it
- * does not hold the SWHID, as it makes entries only for what it holds.
- * @throws {@link UserError} when the archive cannot be reached, or its rate
- * limit is reached.
- */
-async function archiveCitation(swh: Swh, info: SwhidInfo): Promise<CitationAnswer> {
-  if (!info.archived) return 'not-archived';
-  return swh.archive.citation({ swhid: info.swhid.toString() });
-}
-
-/**
- * What a minimal entry says of a file or directory, from its repository.
- *
- * @param git - The Git runner.
- * @param info - The SWHID cited.
- * @param root - The root of the repository holding it, if any.
- * @returns Its title, the origin when public, and the date of the anchor commit.
- */
-async function repositoryMetadata(git: Git, info: SwhidInfo, root: Maybe<string>): Promise<CitationMetadata> {
-  const { origin } = info;
-  return {
-    title: citationTitle(origin, root),
-    url: isPublicOrigin(origin) ? origin : undefined,
-    date: root ? await commitDate(git, root, info.swhid.qualifiers.anchor) : undefined,
-  };
-}
-
-/**
- * The title of a minimal entry: the repository's name.
- *
- * @param origin - The repository's origin, if any.
- * @param root - The repository's root, if any.
- * @returns The origin's name, else the root directory's; `undefined` without either.
- */
-function citationTitle(origin: Maybe<string>, root: Maybe<string>): Maybe<string> {
-  if (origin) return originName(origin);
-  return root ? path.basename(root) : undefined;
-}
-
-/**
- * The date of a commit, as the repository has it.
- *
- * @remarks
- * Only a commit has a date: a SWHID's anchor may also be a directory, a
- * release or a snapshot, of which `git show` would print the content instead.
- *
- * @param git - The Git runner.
- * @param root - The repository's root.
- * @param anchor - A SWHID's anchor, if any.
- * @returns The committer date, `YYYY-MM-DD`, of an anchor that is a commit
- * the repository has; `undefined` otherwise.
- */
-async function commitDate(git: Git, root: string, anchor: Maybe<Swhid>): Promise<Maybe<string>> {
-  if (anchor?.type !== 'rev') return undefined;
-  return git.get(root, ['show', '-s', '--no-show-signature', '--format=%cs', anchor.hash]);
-}
-
-/**
- * Makes the BibTeX entry citing the latest archived snapshot of a public
- * repository.
- *
- * @remarks
- * The repository is cited as the archive holds it, e.g. with a `.git`
- * suffix when that is how it was saved: that origin is what the archive
- * makes its entry for, and what the minimal entry's URL and SWHID give.
- *
- * @param swh - The backend.
- * @param origin - The repository's public URL.
- * @returns The entry, and where it comes from.
- * @throws {@link UserError} when `origin` is not a public URL, the archive
- * does not hold it or has no snapshot of it to cite, cannot be reached, or
- * its rate limit is reached.
- */
-export async function originBibtex(swh: Swh, origin: string): Promise<Citation> {
-  const info = await swh.originStatus(origin);
-  const snapshot = latestSnapshot(info);
-  const archivedOrigin = info.origin;
-  const answer = await swh.archive.citation({ origin: archivedOrigin });
-  return citation(answer, snapshot, { title: originName(archivedOrigin), url: archivedOrigin, date: info.date });
-}
-
-/**
- * The SWHID of an origin's latest archived snapshot, qualified with the origin.
- *
- * @param info - The origin's archival status.
- * @returns The snapshot's SWHID, e.g. `swh:1:snp:…;origin=https://…`.
- * @throws {@link UserError} when the archive does not hold the origin, or its
- * latest visit gives no snapshot to cite.
- */
-function latestSnapshot(info: OriginInfo): Swhid {
-  if (!info.archived) throw new UserError(`Software Heritage has not archived ${info.origin}`);
-  if (!info.snapshot) throw new UserError(`The latest archival visit of ${info.origin} has no snapshot to cite`);
-  return Swhid.of('snp', info.snapshot).qualify({ origin: info.origin });
-}
-
-/**
  * Each source of a BibTeX entry, in words.
  *
  * @remarks
  * One per {@link Why}: a source added there without its words here does not compile.
  */
-const CITATION_WHAT = {
+const DESCRIPTIONS = {
   archive: "the archive's BibTeX entry",
   'no-metadata': 'a minimal BibTeX entry (no citation metadata in the archive)',
   failed: 'a minimal BibTeX entry (the archive failed to make one)',
@@ -321,11 +64,115 @@ const CITATION_WHAT = {
 } as const satisfies Record<Why, string>;
 
 /**
- * Describes a BibTeX entry in words, for messages.
+ * A BibTeX entry citing archived code, and where it comes from: an immutable value.
  *
- * @param why - Where the entry comes from, as {@link citation} gives it.
- * @returns E.g. `"a minimal BibTeX entry (no citation metadata in the archive)"`.
+ * @remarks
+ * Made by {@link Citation.fromArchive} from the archive's own entry, by
+ * {@link Citation.minimal} when there is none, or by {@link Citation.of}
+ * from whatever the archive answered.
+ *
+ * @example
+ * ```ts
+ * const cited = Citation.of('no-metadata', swhid, { title: 'repo', url: 'https://example.org/me/repo' });
+ * cited.entry;       // '@codefragment{swh-cnt-94a9ed0,\n    title = {repo},\n    url = {…},\n    swhid = {…}\n}\n'
+ * cited.description; // 'a minimal BibTeX entry (no citation metadata in the archive)'
+ * ```
  */
-export function citationWhat(why: Why): string {
-  return CITATION_WHAT[why];
+export class Citation {
+  /**
+   * Makes a citation.
+   *
+   * @param entry - The BibTeX entry.
+   * @param why - Where it comes from.
+   */
+  private constructor(
+    readonly entry: string,
+    readonly why: Why,
+  ) {}
+
+  /**
+   * The citation the archive made.
+   *
+   * @param entry - The archive's BibTeX entry, used as is.
+   * @returns The citation.
+   */
+  static fromArchive(entry: string): Citation {
+    return new Citation(entry, 'archive');
+  }
+
+  /**
+   * A minimal citation of a SWHID, as the archive would make it.
+   *
+   * @remarks
+   * Of the type the archive would give (`@codefragment` for a file's
+   * content, `@software` for a snapshot, `@softwareversion` otherwise), with
+   * a key made as the archive makes it, e.g. `swh-cnt-67c1849-L1-L3`.
+   * Fields without a value are left out; see {@link BibtexEntry} for how
+   * the others are escaped.
+   *
+   * @param swhid - The qualified SWHID cited, for the `swhid` field; its
+   * object type gives the entry's type, its hash and lines the key.
+   * @param why - Why the entry is a minimal one.
+   * @param metadata - What else it says: title, URL, date.
+   * @returns The citation.
+   */
+  static minimal(swhid: Swhid, why: MinimalWhy, metadata: CitationMetadata = {}): Citation {
+    const day = metadata.date?.substring(0, 10);
+    const entry = new BibtexEntry(ENTRY_TYPES[swhid.type], Citation.key(swhid), {
+      title: metadata.title,
+      url: metadata.url,
+      date: day,
+      year: day?.substring(0, 4),
+      swhid: swhid.toString(),
+    });
+    return new Citation(entry.toString(), why);
+  }
+
+  /**
+   * The citation of a SWHID, from what the archive answered.
+   *
+   * @param answer - What the archive answered, see {@link ArchiveApi.citation}.
+   * @param swhid - The qualified SWHID cited.
+   * @param metadata - What a minimal entry says, when the archive gave no entry.
+   * @returns The archive's entry when it gave one, else a minimal one.
+   */
+  static of(answer: CitationAnswer, swhid: Swhid, metadata: CitationMetadata = {}): Citation {
+    if (typeof answer === 'object') return Citation.fromArchive(answer.entry);
+    return Citation.minimal(swhid, answer, metadata);
+  }
+
+  /** Where the entry comes from, in words, for messages: e.g. `"the archive's BibTeX entry"`. */
+  get description(): string {
+    return DESCRIPTIONS[this.why];
+  }
+
+  /**
+   * The BibTeX entry.
+   *
+   * @returns The same as {@link Citation.entry}.
+   */
+  toString(): string {
+    return this.entry;
+  }
+
+  /**
+   * The key of a minimal entry, as the archive makes it.
+   *
+   * @param swhid - The SWHID cited.
+   * @returns E.g. `swh-cnt-67c1849-L1-L3`: its object type, its short hash, its lines.
+   */
+  private static key(swhid: Swhid): string {
+    return `swh-${swhid.type}-${swhid.shortHash}${Citation.linesKey(swhid.qualifiers.lines)}`;
+  }
+
+  /**
+   * The part of a key that gives the cited lines, as the archive makes it.
+   *
+   * @param lines - The cited lines, if any.
+   * @returns E.g. `-L1-L3`, or `-L5` for one line; `""` without lines.
+   */
+  private static linesKey(lines: Maybe<LineRange>): string {
+    if (!lines) return '';
+    return lines.isSingle ? `-L${lines.first}` : `-L${lines.first}-L${lines.last}`;
+  }
 }

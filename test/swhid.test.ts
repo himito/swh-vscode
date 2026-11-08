@@ -14,7 +14,7 @@ import * as assert from 'node:assert/strict';
 import {
   ancestors,
   buildScan,
-  citation,
+  Citation,
   encodeOrigin,
   encodePath,
   findSwhids,
@@ -204,31 +204,40 @@ test('findSwhids', () => {
   );
 });
 
+/**
+ * A citation's entry and source, as a plain object, to compare.
+ *
+ * @param citation - The citation.
+ * @returns Its entry and where it comes from.
+ */
+const plain = (citation: Citation) => ({ entry: citation.entry, why: citation.why });
+
 // Minimal BibTeX entries: type and key by object type, optional fields left
 // out, and the archive's own entry passed through as is.
-test('citation', () => {
+test('Citation', () => {
   const cnt = Swhid.of('cnt', '94a9ed024d3859793618152ea559a168bbcbb5e2');
   const swhid = cnt.qualify({ origin: 'https://example.org/me/repo' });
-  assert.deepEqual(citation('no-metadata', swhid, { title: 'repo', url: 'https://example.org/me/repo' }), {
+  assert.deepEqual(plain(Citation.of('no-metadata', swhid, { title: 'repo', url: 'https://example.org/me/repo' })), {
     entry: '@codefragment{swh-cnt-94a9ed0,\n    title = {repo},\n    url = {https://example.org/me/repo},\n    swhid = {' + swhid + '}\n}\n',
     why: 'no-metadata',
   });
   const snp = Swhid.of('snp', sha('0'));
-  const { entry } = citation('failed', snp, { title: 'repo', date: '2026-07-01T10:00:00Z' });
+  const { entry } = Citation.minimal(snp, 'failed', { title: 'repo', date: '2026-07-01T10:00:00Z' });
   assert.equal(entry, `@software{swh-snp-0000000,\n    title = {repo},\n    date = {2026-07-01},\n    year = {2026},\n    swhid = {${snp}}\n}\n`);
-  assert.equal(citation('failed', cnt.qualify({ lines: LineRange.of(2, 3) })).entry.split(',')[0], '@codefragment{swh-cnt-94a9ed0-L2-L3');
-  assert.equal(citation('failed', Swhid.of('dir', sha('9'))).entry.split('{')[0], '@softwareversion');
-  assert.deepEqual(citation({ entry: '@x{}' }, cnt), { entry: '@x{}', why: 'archive' });
+  assert.equal(Citation.minimal(cnt.qualify({ lines: LineRange.of(2, 3) }), 'failed').entry.split(',')[0], '@codefragment{swh-cnt-94a9ed0-L2-L3');
+  assert.equal(Citation.minimal(Swhid.of('dir', sha('9')), 'failed').entry.split('{')[0], '@softwareversion');
+  assert.deepEqual(plain(Citation.of({ entry: '@x{}' }, cnt)), { entry: '@x{}', why: 'archive' });
+  assert.equal(String(Citation.fromArchive('@x{}')), '@x{}');
   // LaTeX's special characters show as they are; braces stay balanced
-  const awkward = citation('failed', cnt.qualify({ origin: 'https://h/a{b' }), { title: 'my_repo{x} 50% & #1', url: 'https://h/a{b' }).entry;
+  const awkward = Citation.minimal(cnt.qualify({ origin: 'https://h/a{b' }), 'failed', { title: 'my_repo{x} 50% & #1', url: 'https://h/a{b' }).entry;
   assert.match(awkward, /title = \{my\\_repo\\textbraceleft\{\}x\\textbraceright\{\} 50\\% \\& \\#1\},/);
   assert.match(awkward, /url = \{https:\/\/h\/a%7Bb\},/);
   assert.match(awkward, /swhid = \{swh:1:cnt:94a9ed0[0-9a-f]*;origin=https:\/\/h\/a%7Bb\}/);
   const depth = [...awkward].reduce((open, char) => open + (char === '{' ? 1 : char === '}' ? -1 : 0), 0);
   assert.equal(depth, 0);
   // one line, and a release, a version of the software
-  assert.equal(citation('failed', cnt.qualify({ lines: LineRange.of(5) })).entry.split(',')[0], '@codefragment{swh-cnt-94a9ed0-L5');
-  assert.equal(citation('failed', Swhid.of('rel', sha('9'))).entry.split('{')[0], '@softwareversion');
+  assert.equal(Citation.minimal(cnt.qualify({ lines: LineRange.of(5) }), 'failed').entry.split(',')[0], '@codefragment{swh-cnt-94a9ed0-L5');
+  assert.equal(Citation.minimal(Swhid.of('rel', sha('9')), 'failed').entry.split('{')[0], '@softwareversion');
 });
 
 // The scan tree: path order, parent links, per-directory counts, statuses and summary.

@@ -1,5 +1,6 @@
 /**
- * What every group of commands shares: the backend, and "where the user is".
+ * What every group of commands shares: the backend, the citations, and
+ * "where the user is".
  *
  * @remarks
  * {@link CommandContext} finds what a command is about: the file in the active
@@ -12,7 +13,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Cancelled, isPublicOrigin, type LineRange, type Maybe, parseOrigin, type Swh, UserError } from '#core';
+import { Cancelled, Citer, isPublicOrigin, type LineRange, type Maybe, parseOrigin, type Swh, UserError } from '#core';
 import type { Reports } from '../reports';
 import { ask, currentRepoRoot, fileEditor, realCurrentDir, realpath, selectionLines, withoutContext } from '../helpers';
 
@@ -82,8 +83,14 @@ function originInputError(input: string): Maybe<string> {
   }
 }
 
-/** The backend, and what the commands are about: the target, the repository, its origin. */
+/**
+ * The backend and the citations, and what the commands are about: the
+ * target, the repository, its origin.
+ */
 export class CommandContext {
+  /** Cites files, directories and repositories, with the backend. */
+  readonly citer: Citer;
+
   /**
    * Creates the context.
    *
@@ -95,7 +102,9 @@ export class CommandContext {
     readonly swh: Swh,
     readonly reports: Reports,
     readonly onArchiveChange: ArchiveChangeHandler,
-  ) { }
+  ) {
+    this.citer = new Citer(swh);
+  }
 
   /**
    * The root of the Git repository of the current directory.
