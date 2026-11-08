@@ -335,18 +335,21 @@ export class StatusBar implements vscode.Disposable {
    * @remarks
    * Checks may finish out of order: an entry is never overwritten by an
    * older check than the one that set it. A status given without a SWHID
-   * keeps the SWHID already known (e.g. `origin-archived` found after
-   * `not-archived`), except `pending`, which clears it: a new check means
-   * the content may have changed.
+   * keeps the one its own check already found (e.g. `origin-archived`
+   * reported after `not-archived`), never one from an earlier check: the
+   * content may have changed since.
    *
    * @param path - The real path checked.
    * @param entry - What was found.
    */
   private record(path: string, entry: Entry): void {
-    const old = this.entries.get(path);
-    if (old && old.check > entry.check) return;
-    const swhid = entry.swhid ?? (entry.status === 'pending' ? undefined : old?.swhid);
+    const previous = this.entries.get(path);
+    if (previous && previous.check > entry.check) return;
+
+    const sameCheck = previous?.check === entry.check;
+    const swhid = entry.swhid ?? (sameCheck ? previous.swhid : undefined);
     this.entries.set(path, { ...entry, swhid });
+
     if (this.current?.path === path) this.render();
   }
 
@@ -364,18 +367,24 @@ export class StatusBar implements vscode.Disposable {
    * @param report - Records a status, and the SWHID when known.
    * @throws {@link core!UserError} when Git cannot hash the file or the archive fails.
    */
-  private async fileStatus(file: string, root: string, report: Report) {
+  private async fileStatus(file: string, root: string, report: Report): Promise<void> {
     if (!isPublicOrigin(await this.swh.originOf(root))) {
-      // as qualifiedSwhid has it: the archive is not asked
-      report('not-archived', await this.swh.contentSwhid(file, root).catch(() => undefined));
+      // the archive cannot hold it, so it is not asked, as in qualifiedSwhid
+      const swhid = await this.swh.contentSwhid(file, root).catch(() => undefined);
+      report('not-archived', swhid);
       return;
     }
-    const result = await this.swh.fileStatus(file, await this.swh.contentSwhid(file, root));
-    report(result.archived ? 'archived' : 'not-archived', result.swhid);
-    if (!result.archived) {
-      const info = await this.swh.originQuiet(root).catch(() => null);
-      if (info?.archived) report('origin-archived');
+
+    const swhid = await this.swh.contentSwhid(file, root);
+    if (await this.swh.archivedP(swhid)) {
+      report('archived', swhid);
+      return;
     }
+
+    report('not-archived', swhid);
+    // shown at once; refined when the origin's answer comes, if it ever does
+    const origin = await this.swh.originQuiet(root).catch(() => null);
+    if (origin?.archived) report('origin-archived');
   }
 
   /**
@@ -392,15 +401,23 @@ export class StatusBar implements vscode.Disposable {
    * @param report - Records a status, and the SWHID when known.
    * @throws {@link core!UserError} when Git or the archive fails.
    */
-  private async dirStatus(dir: string, root: string, report: Report) {
-    const info = await this.swh.originQuiet(root);
-    const tree = info?.archived && !(await this.swh.untracked(dir)) ? await this.swh.headTree(dir, root) : undefined;
-    if (tree) {
-      const result = await this.swh.fileStatus(dir, core('dir', tree));
-      report(result.archived ? 'archived' : 'origin-archived', result.swhid);
-    } else {
-      report(info?.archived ? 'origin-archived' : 'not-archived');
+  private async dirStatus(dir: string, root: string, report: Report): Promise<void> {
+    const origin = await this.swh.originQuiet(root);
+    if (!origin?.archived) {
+      report('not-archived');
+      return;
     }
+
+    // HEAD's tree, unless untracked or modified files make the directory differ from it
+    const tree = (await this.swh.untracked(dir)) ? undefined : await this.swh.headTree(dir, root);
+    if (!tree) {
+      report('origin-archived');
+      return;
+    }
+
+    const swhid = core('dir', tree);
+    const status = (await this.swh.archivedP(swhid)) ? 'archived' : 'origin-archived';
+    report(status, swhid);
   }
 
   /**
