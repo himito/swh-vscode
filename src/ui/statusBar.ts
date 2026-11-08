@@ -34,6 +34,25 @@ import { ARCHIVE_URL_SETTING, config, fileEditor, realCurrentDir } from './helpe
  */
 export type Status = 'archived' | 'not-archived' | 'origin-archived' | 'pending' | 'error';
 
+/** The id of the status bar item, by which the user can hide it. */
+const ITEM_ID = 'swh.status';
+
+/** The item's priority among the items on the right: higher is further left. */
+const ITEM_PRIORITY = 100;
+
+/** The command a click on the item runs, as `package.json` declares it: it copies the SWHID. */
+const CLICK_COMMAND = 'swh.statusBarCopy';
+
+/**
+ * Whether a document is the one in the active editor.
+ *
+ * @param doc - The document.
+ * @returns `true` when the active editor shows it.
+ */
+function isActiveDocument(doc: vscode.TextDocument): boolean {
+  return doc === vscode.window.activeTextEditor?.document;
+}
+
 /**
  * The status bar texts by status, used when the `swh.statusBar.lighters`
  * setting does not override them.
@@ -94,9 +113,9 @@ type Entry = {
  */
 export class StatusBar implements vscode.Disposable {
   /** The status bar item itself, on the right. */
-  private item = vscode.window.createStatusBarItem('swh.status', vscode.StatusBarAlignment.Right, 100);
+  private readonly item = vscode.window.createStatusBarItem(ITEM_ID, vscode.StatusBarAlignment.Right, ITEM_PRIORITY);
   /** What is known per path, by real path. */
-  private entries = new Map<string, Entry>();
+  private readonly entries = new Map<string, Entry>();
   /** The number of the latest archive check started. */
   private checks = 0;
   /** The number of the latest call to {@link StatusBar.update}. */
@@ -104,35 +123,60 @@ export class StatusBar implements vscode.Disposable {
   /** The path shown, and whether it is a directory; undefined when the item is hidden. */
   current?: Shown;
   /** The item and the event listeners, disposed of with the status bar. */
-  private disposables: vscode.Disposable[] = [];
+  private readonly disposables: vscode.Disposable[] = [];
 
   /**
    * Create the item and listen to the events that may change what it shows.
    *
    * @param swh - The backend that answers the archival questions.
    */
-  constructor(private swh: Swh) {
+  constructor(private readonly swh: Swh) {
     this.item.name = 'Software Heritage';
-    this.item.command = 'swh.statusBarCopy';
+    this.item.command = CLICK_COMMAND;
     this.disposables.push(
       this.item,
-      vscode.window.onDidChangeActiveTextEditor(() => this.update()),
-      vscode.workspace.onDidSaveTextDocument((doc) => {
-        if (doc === vscode.window.activeTextEditor?.document) void this.update(true);
-      }),
-      vscode.workspace.onDidChangeTextDocument((event) => {
-        // modified, or back to its saved state by undo: only the tooltip changes
-        if (event.document === vscode.window.activeTextEditor?.document) this.render();
-      }),
-      vscode.workspace.onDidChangeWorkspaceFolders(() => this.update()),
-      vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration(`swh.${ARCHIVE_URL_SETTING}`)) {
-          // another archive: none of the previous answers hold
-          this.swh.forgetAll();
-          this.forget();
-        } else if (event.affectsConfiguration('swh')) void this.update();
-      }),
+      vscode.window.onDidChangeActiveTextEditor(() => void this.update()),
+      vscode.workspace.onDidChangeWorkspaceFolders(() => void this.update()),
+      vscode.workspace.onDidSaveTextDocument((doc) => this.onSave(doc)),
+      vscode.workspace.onDidChangeTextDocument((event) => this.onEdit(event)),
+      vscode.workspace.onDidChangeConfiguration((event) => this.onConfigurationChange(event)),
     );
+  }
+
+  /**
+   * Checks the active file again when it is saved: its content on disk changed.
+   *
+   * @param doc - The document saved.
+   */
+  private onSave(doc: vscode.TextDocument): void {
+    if (isActiveDocument(doc)) void this.update(true);
+  }
+
+  /**
+   * Redraws the item when the active file is edited: it is modified, or back
+   * to its saved state by undo. Only the tooltip changes, as the status is
+   * that of the file on disk.
+   *
+   * @param event - The edit.
+   */
+  private onEdit(event: vscode.TextDocumentChangeEvent): void {
+    if (isActiveDocument(event.document)) this.render();
+  }
+
+  /**
+   * Follows the settings: another archive forgets every answer, as none of
+   * the previous archive's hold; any other setting of the extension
+   * redraws the item, after checking again if needed.
+   *
+   * @param event - What changed in the settings.
+   */
+  private onConfigurationChange(event: vscode.ConfigurationChangeEvent): void {
+    if (event.affectsConfiguration(`swh.${ARCHIVE_URL_SETTING}`)) {
+      this.swh.forgetAll();
+      this.forget();
+      return;
+    }
+    if (event.affectsConfiguration('swh')) void this.update();
   }
 
   /** Remove the item and stop listening to events. */
