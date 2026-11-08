@@ -49,12 +49,15 @@
     "test": "tsc -p . && node --test \"out/test/*.test.js\"",
     "vscode:prepublish": "npm run compile",
     "smoke": "tsc -p . && node out/test/smoke/run.js",
-    "docs": "typedoc"
+    "docs": "typedoc",
+    "changelog": "git-cliff --unreleased --strip header",
+    "changelog:release": "git-cliff --unreleased --tag v$npm_package_version --prepend CHANGELOG.md"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
     "@vscode/test-electron": "^3.1.0",
+    "git-cliff": "^2.14.2",
     "typedoc": "^0.28.20",
     "typescript": "^5.4.0"
   },

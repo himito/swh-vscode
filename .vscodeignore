@@ -9,3 +9,4 @@ tsconfig.json
 .vscode/**
 docs/**
 typedoc.json
+cliff.toml

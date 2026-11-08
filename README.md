@@ -121,14 +121,26 @@ npm install
 npm test        # unit tests, and the Git backend on a temporary repository
 npm run smoke   # runs the commands in a real VS Code
 npm run docs    # the API documentation, as HTML in docs/
+npm run changelog  # what the commits since the last release would add to CHANGELOG.md
 ```
 
 To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce package`.
+
+### Changelog
+
+[CHANGELOG.md](CHANGELOG.md) follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). It is written for users, so it is curated by hand, with [git-cliff](https://git-cliff.org) drafting each release from the commits (see [cliff.toml](cliff.toml)):
+
+- Commit subjects follow [Conventional Commits](https://www.conventionalcommits.org): `feat` gives an *Added* entry, `perf` *Changed*, `revert` *Removed*, `fix` *Fixed* and `fix(security)` *Security*. A breaking change (`feat!:`, or a `BREAKING CHANGE:` footer) is marked **BREAKING**. `refactor`, `docs`, `ci`, `build`, `chore`, `test` and `style` change nothing users see and give no entry.
+- You may write upcoming changes by hand under `## [Unreleased]`.
+- When releasing, after setting the new version in `package.json`, run `npm run changelog:release`. It drafts the release right below `## [Unreleased]`: its heading and date, the entries from the commits, then what was written under `[Unreleased]`. Curate it (merge the sections that appear twice, reword the entries for users), and commit it before tagging `vX.Y.Z`.
+- Released sections are never generated again: do not run `git cliff -o CHANGELOG.md`, which would replace them with the raw commits.
 
 ### Project structure
 
 ```text
 ├── package.json         The extension manifest: commands, menus, views, settings
+├── CHANGELOG.md         The changes of each release (Keep a Changelog)
+├── cliff.toml           How git-cliff drafts the releases of CHANGELOG.md
 ├── tsconfig.json
 ├── typedoc.json         The API documentation's settings (npm run docs)
 ├── assets/
