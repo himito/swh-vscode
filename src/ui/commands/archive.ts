@@ -5,7 +5,7 @@
  */
 
 import { formatDate, type Maybe, type OriginInfo, type OriginVisits, type SaveRequest, Swhid, type Visit } from '#core';
-import { ask, busy, info } from '../helpers';
+import { ask, busy, info } from '#ui/helpers';
 import type { CommandContext } from './context';
 
 /** An origin's archival status in words, from {@link ArchiveCommands.statusText}. */

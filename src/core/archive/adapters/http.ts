@@ -11,7 +11,7 @@
  * @packageDocumentation
  */
 
-import type { Maybe } from '../../shared';
+import type { Maybe } from '#core/shared';
 
 /**
  * The {@link Resp.body} of a response whose body is not JSON.

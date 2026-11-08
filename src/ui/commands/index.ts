@@ -19,7 +19,7 @@
  */
 
 import type { Swh } from '#core';
-import type { Reports } from '../reports';
+import type { Reports } from '#ui/reports';
 import { ArchiveCommands } from './archive';
 import { CitationCommands } from './citation';
 import { type ArchiveChangeHandler, CommandContext } from './context';

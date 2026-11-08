@@ -6,8 +6,8 @@
 
 import * as vscode from 'vscode';
 import { browseUrl, type Maybe, Swhid, SWHID_PREFIX } from '#core';
-import { archiveUrl, openUrl, withoutContext } from '../helpers';
-import { MENU, type MenuEntry } from '../menu';
+import { archiveUrl, openUrl, withoutContext } from '#ui/helpers';
+import { MENU, type MenuEntry } from '#ui/menu';
 
 /**
  * Checks a SWHID as the user types it.

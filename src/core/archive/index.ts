@@ -27,10 +27,10 @@
  * @packageDocumentation
  */
 
-import { ancestors, type Maybe, UserError } from '../shared';
-import { relativePath } from '../git';
-import { isPublicOrigin } from '../origin';
-import { Swhid } from '../swhid';
+import { ancestors, type Maybe, UserError } from '#core/shared';
+import { relativePath } from '#core/git';
+import { isPublicOrigin } from '#core/origin';
+import { Swhid } from '#core/swhid';
 import { forgetNegatives } from './memo';
 import { SwhSwhids } from './swhids';
 import type { TreeNode } from './types';

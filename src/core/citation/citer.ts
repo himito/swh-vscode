@@ -9,11 +9,11 @@
  */
 
 import * as path from 'path';
-import type { CitationAnswer, OriginInfo, Swh, SwhidInfo } from '../archive';
+import type { CitationAnswer, OriginInfo, Swh, SwhidInfo } from '#core/archive';
 import { Citation, type CitationMetadata } from './citation';
-import { type Maybe, UserError } from '../shared';
-import { isPublicOrigin, originName } from '../origin';
-import { Swhid } from '../swhid';
+import { type Maybe, UserError } from '#core/shared';
+import { isPublicOrigin, originName } from '#core/origin';
+import { Swhid } from '#core/swhid';
 
 /**
  * Cites archived code: a file, its lines, a directory, or a repository.

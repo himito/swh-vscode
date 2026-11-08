@@ -7,7 +7,7 @@
  */
 
 export * from './apiToken';
-export * from './commands';
+export * from '#ui/commands';
 export * from './helpers';
 export * from './menu';
 export * from './menuView';

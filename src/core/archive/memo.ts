@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { Maybe } from '../shared';
+import type { Maybe } from '#core/shared';
 
 /** Seconds during which an archive answer that may change is trusted. */
 export const MEMO_TTL = 600;

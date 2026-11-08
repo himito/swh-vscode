@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 
-import { hexify, type Maybe, UserError } from './shared';
+import { hexify, type Maybe, UserError } from '#core/shared';
 
 /**
  * Converts a Git remote URL into the origin URL the archive knows it by.

@@ -5,9 +5,9 @@
  * @packageDocumentation
  */
 
-import { type Maybe, UserError } from '../shared';
-import { isPublicOrigin, normalizeOrigin, originCandidates } from '../origin';
-import { Swhid } from '../swhid';
+import { type Maybe, UserError } from '#core/shared';
+import { isPublicOrigin, normalizeOrigin, originCandidates } from '#core/origin';
+import { Swhid } from '#core/swhid';
 import { forgetNegatives, fresh, Memo, MEMO_TTL, memoPut } from './memo';
 import { SwhKnown } from './known';
 import type { OriginInfo, OriginVisits, SaveRequest, Visit } from './types';

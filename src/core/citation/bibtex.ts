@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 
-import type { Maybe } from '../shared';
+import type { Maybe } from '#core/shared';
 
 /**
  * The fields of a BibTeX entry, by name, in the order they are written; a

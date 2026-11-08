@@ -9,9 +9,9 @@
  * @packageDocumentation
  */
 
-import type { TreeNode } from './archive';
-import type { Swhid } from './swhid';
-import { ancestors } from './shared';
+import type { TreeNode } from '#core/archive';
+import type { Swhid } from '#core/swhid';
+import { ancestors } from '#core/shared';
 
 /**
  * The archival status of a scanned item.

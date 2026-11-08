@@ -13,10 +13,10 @@
  * @packageDocumentation
  */
 
-import type { ArchiveApi, CitationAnswer } from '../archive';
+import type { ArchiveApi, CitationAnswer } from '#core/archive';
 import { BibtexEntry } from './bibtex';
-import type { LineRange, ObjectType, Swhid } from '../swhid';
-import type { Maybe } from '../shared';
+import type { LineRange, ObjectType, Swhid } from '#core/swhid';
+import type { Maybe } from '#core/shared';
 
 /**
  * Where a BibTeX entry comes from: `'archive'` for the archive's own, else

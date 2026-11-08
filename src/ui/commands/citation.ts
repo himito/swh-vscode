@@ -6,7 +6,7 @@
 
 import * as vscode from 'vscode';
 import type { Maybe } from '#core';
-import { busy, fileEditor, info } from '../helpers';
+import { busy, fileEditor, info } from '#ui/helpers';
 import type { CommandInput, CommandContext } from './context';
 import type { SwhidCommands } from './swhid';
 

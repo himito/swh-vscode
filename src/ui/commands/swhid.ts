@@ -8,7 +8,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { browseUrl, isPublicOrigin, type LineRange, markdownText, markdownUrl, type Maybe, normalizeOrigin, type SwhidInfo } from '#core';
-import { archiveUrl, ask, busy, info, openUrl } from '../helpers';
+import { archiveUrl, ask, busy, info, openUrl } from '#ui/helpers';
 import type { ArchiveCommands } from './archive';
 import type { CommandInput, CommandContext, Target } from './context';
 

@@ -4,9 +4,9 @@
  * @packageDocumentation
  */
 
-import type { Git } from '../git';
-import type { Swhid } from '../swhid';
-import type { Maybe } from '../shared';
+import type { Git } from '#core/git';
+import type { Swhid } from '#core/swhid';
+import type { Maybe } from '#core/shared';
 import { Memo, memoGet, memoPut, now, uniq, UNKNOWN } from './memo';
 import type { ArchiveApi } from './archiveApi';
 import type { SwhDeps } from './types';

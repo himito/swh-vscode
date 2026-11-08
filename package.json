@@ -33,6 +33,22 @@
       "types": "./src/core/index.ts",
       "default": "./out/src/core/index.js"
     },
+    "#core/archive": {
+      "types": "./src/core/archive/index.ts",
+      "default": "./out/src/core/archive/index.js"
+    },
+    "#core/citation": {
+      "types": "./src/core/citation/index.ts",
+      "default": "./out/src/core/citation/index.js"
+    },
+    "#core/shared": {
+      "types": "./src/core/shared/index.ts",
+      "default": "./out/src/core/shared/index.js"
+    },
+    "#core/swhid": {
+      "types": "./src/core/swhid/index.ts",
+      "default": "./out/src/core/swhid/index.js"
+    },
     "#core/*": {
       "types": "./src/core/*.ts",
       "default": "./out/src/core/*.js"
@@ -40,6 +56,14 @@
     "#ui": {
       "types": "./src/ui/index.ts",
       "default": "./out/src/ui/index.js"
+    },
+    "#ui/commands": {
+      "types": "./src/ui/commands/index.ts",
+      "default": "./out/src/ui/commands/index.js"
+    },
+    "#ui/*": {
+      "types": "./src/ui/*.ts",
+      "default": "./out/src/ui/*.js"
     }
   },
   "icon": "assets/swh-logo-128.png",

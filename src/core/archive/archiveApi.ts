@@ -15,7 +15,7 @@
  * @packageDocumentation
  */
 
-import type { Maybe } from '../shared';
+import type { Maybe } from '#core/shared';
 import type { CitationAnswer, SaveRequest, Visit } from './types';
 
 /**

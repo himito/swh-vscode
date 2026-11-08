@@ -4,9 +4,9 @@
  * @packageDocumentation
  */
 
-import type { Git } from '../git';
-import type { Swhid } from '../swhid';
-import type { Maybe } from '../shared';
+import type { Git } from '#core/git';
+import type { Swhid } from '#core/swhid';
+import type { Maybe } from '#core/shared';
 import type { ArchiveApi } from './archiveApi';
 
 /** An API token, or `undefined` to make anonymous requests. */

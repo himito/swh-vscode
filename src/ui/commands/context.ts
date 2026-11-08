@@ -14,8 +14,8 @@
 
 import * as vscode from 'vscode';
 import { Cancelled, Citer, isPublicOrigin, type LineRange, type Maybe, parseOrigin, type Swh, UserError } from '#core';
-import type { Reports } from '../reports';
-import { ask, currentRepoRoot, fileEditor, realCurrentDir, realpath, selectionLines, withoutContext } from '../helpers';
+import type { Reports } from '#ui/reports';
+import { ask, currentRepoRoot, fileEditor, realCurrentDir, realpath, selectionLines, withoutContext } from '#ui/helpers';
 
 /**
  * The options a SWHID command accepts when not run on a `Uri`.

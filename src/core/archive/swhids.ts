@@ -7,10 +7,10 @@
 
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { relativePath } from '../git';
-import { type Maybe, UserError } from '../shared';
-import { isPublicOrigin } from '../origin';
-import { type LineRange, Swhid } from '../swhid';
+import { relativePath } from '#core/git';
+import { type Maybe, UserError } from '#core/shared';
+import { isPublicOrigin } from '#core/origin';
+import { type LineRange, Swhid } from '#core/swhid';
 import { uniq } from './memo';
 import { SwhOrigins } from './origins';
 import type { FileStatus, SwhidInfo } from './types';

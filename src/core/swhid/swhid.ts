@@ -13,7 +13,7 @@
  * @packageDocumentation
  */
 
-import { baseUrl, type Maybe, UserError } from '../shared';
+import { baseUrl, type Maybe, UserError } from '#core/shared';
 import { Qualifiers, type QualifierValues } from './qualifiers';
 
 /**

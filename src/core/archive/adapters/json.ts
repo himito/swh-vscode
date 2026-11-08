@@ -12,7 +12,7 @@
  * @packageDocumentation
  */
 
-import { type Maybe, UserError } from '../../shared';
+import { type Maybe, UserError } from '#core/shared';
 import type { SaveRequest, Visit } from '../types';
 
 /** A SHA-1 in hexadecimal, as snapshot identifiers are. */

@@ -7,8 +7,8 @@
  * @packageDocumentation
  */
 
-import { encodeOrigin, isPublicOrigin } from '../origin';
-import { hexify, type Maybe, unhex, UserError } from '../shared';
+import { encodeOrigin, isPublicOrigin } from '#core/origin';
+import { hexify, type Maybe, unhex, UserError } from '#core/shared';
 import { LineRange } from './lineRange';
 import { type ObjectType, Swhid } from './swhid';
 

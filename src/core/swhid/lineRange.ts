@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 
-import { type Maybe, UserError } from '../shared';
+import { type Maybe, UserError } from '#core/shared';
 
 /** The text of a line range: a line, or two separated by `-`, numbered from 1. */
 const LINES = /^(?<first>[1-9][0-9]*)(?:-(?<last>[1-9][0-9]*))?$/;
