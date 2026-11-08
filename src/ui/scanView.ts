@@ -17,7 +17,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { browseUrl, buildScan, type Maybe, Scan, ScanItem, scanSummary, shortSwhid, Swh, typeOf, UserError } from '#core';
+import { browseUrl, buildScan, type Maybe, Scan, ScanItem, type ScanStatus, scanSummary, shortSwhid, Swh, typeOf, UserError } from '#core';
 import { archiveUrl, info, openUrl } from './helpers';
 import { openSwhidUri } from './reports';
 
@@ -26,7 +26,82 @@ const ICONS = {
   archived: ['pass', 'testing.iconPassed'],
   partial: ['circle-large-outline', 'list.warningForeground'],
   'not-archived': ['error', 'list.errorForeground'],
-} as const;
+} as const satisfies Record<ScanStatus, readonly [string, string]>;
+
+/** Each scan status in words, for the tooltips. */
+const STATUS_WORDS = {
+  archived: 'archived',
+  partial: 'partially archived',
+  'not-archived': 'not archived',
+} as const satisfies Record<ScanStatus, string>;
+
+/** What a scan item is: a directory, a file, or a submodule's commit. */
+type ItemKind = 'dir' | 'file' | 'submodule';
+
+/**
+ * What a scan item is.
+ *
+ * @param scanItem - The item.
+ * @returns Its kind; a submodule is a commit, not a file to open.
+ */
+function itemKind(scanItem: ScanItem): ItemKind {
+  if (scanItem.dir) return 'dir';
+  return typeOf(scanItem.swhid) === 'rev' ? 'submodule' : 'file';
+}
+
+/**
+ * The icon of a scan item: its status, as a codicon in the status's color.
+ *
+ * @param scanItem - The item.
+ * @returns The icon.
+ */
+function itemIcon(scanItem: ScanItem): vscode.ThemeIcon {
+  const [icon, color] = ICONS[scanItem.status];
+  return new vscode.ThemeIcon(icon, new vscode.ThemeColor(color));
+}
+
+/**
+ * The description of a scan item: a directory's archived and total file counts.
+ *
+ * @param scanItem - The item.
+ * @returns E.g. `3/5`, or `undefined` for a file.
+ */
+function itemDescription(scanItem: ScanItem): Maybe<string> {
+  if (!scanItem.counts) return undefined;
+  const [total, archived] = scanItem.counts;
+  return `${archived}/${total}`;
+}
+
+/**
+ * The context value of a scan item, which selects the actions of its
+ * context menu in `package.json` (`viewItem =~ /archived/`, `/file/`).
+ *
+ * @param scanItem - The item.
+ * @returns `swhItem`, the item's kind, and `archived` when it is, separated by spaces.
+ */
+function itemContextValue(scanItem: ScanItem): string {
+  const words = ['swhItem', itemKind(scanItem)];
+  if (scanItem.status === 'archived') words.push('archived');
+  return words.join(' ');
+}
+
+/**
+ * The tooltip of a scan item: its path and status, and its SWHID, as a link
+ * to the archive when it is archived.
+ *
+ * @param scanItem - The item.
+ * @returns The tooltip, whose links may run `swh.openSwhid` only.
+ */
+function itemTooltip(scanItem: ScanItem): vscode.MarkdownString {
+  const tip = new vscode.MarkdownString(undefined, true);
+  tip.isTrusted = { enabledCommands: ['swh.openSwhid'] };
+
+  const shownPath = scanItem.path === '.' ? './' : scanItem.path;
+  tip.appendMarkdown(`**${shownPath}**: ${STATUS_WORDS[scanItem.status]}\n\n`);
+  tip.appendMarkdown(scanItem.status === 'archived' ? `[${scanItem.swhid}](${openSwhidUri(scanItem.swhid)})` : scanItem.swhid);
+
+  return tip;
+}
 
 /**
  * The data provider of the Scan view, and the actions on its items.
@@ -68,14 +143,14 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
     this.disposables.push(
       this.view,
       this.emitter,
-      this.view.onDidExpandElement((e) => this.expanded.add(e.element)),
-      this.view.onDidCollapseElement((e) => this.expanded.delete(e.element)),
+      this.view.onDidExpandElement((event) => this.expanded.add(event.element)),
+      this.view.onDidCollapseElement((event) => this.expanded.delete(event.element)),
     );
   }
 
   /** Dispose of the view and its listeners. */
   dispose() {
-    for (const d of this.disposables) d.dispose();
+    for (const disposable of this.disposables) disposable.dispose();
   }
 
 
@@ -111,35 +186,34 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * `swhItem`, `dir`, `file` or `submodule`, and `archived`, selects the actions of the
    * item's context menu in `package.json`. Clicking a file opens it.
    *
-   * @param n - The item to show.
-   * @returns The tree item for `n`.
+   * @param scanItem - The scan item to show.
+   * @returns The tree item for `scanItem`.
    */
-  getTreeItem(n: ScanItem): vscode.TreeItem {
-    const item = new vscode.TreeItem(
-      n.name,
-      n.children.length
-        ? this.expanded.has(n)
-          ? vscode.TreeItemCollapsibleState.Expanded
-          : vscode.TreeItemCollapsibleState.Collapsed
-        : vscode.TreeItemCollapsibleState.None,
-    );
-    item.id = `${this.scanId}:${n.path}`;
-    const [icon, color] = ICONS[n.status];
-    item.iconPath = new vscode.ThemeIcon(icon, new vscode.ThemeColor(color));
-    if (n.counts) item.description = `${n.counts[1]}/${n.counts[0]}`;
-    // a submodule is a commit, not a file to open
-    const file = !n.dir && typeOf(n.swhid) !== 'rev';
-    item.contextValue = ['swhItem', n.dir ? 'dir' : file ? 'file' : 'submodule', n.status === 'archived' ? 'archived' : '']
-      .filter(Boolean)
-      .join(' ');
-    const tip = new vscode.MarkdownString(undefined, true);
-    tip.isTrusted = { enabledCommands: ['swh.openSwhid'] };
-    const status = { archived: 'archived', partial: 'partially archived', 'not-archived': 'not archived' }[n.status];
-    tip.appendMarkdown(`**${n.path === '.' ? './' : n.path}**: ${status}\n\n`);
-    tip.appendMarkdown(n.status === 'archived' ? `[${n.swhid}](${openSwhidUri(n.swhid)})` : n.swhid);
-    item.tooltip = tip;
-    if (file) item.command = { command: 'swh.scan.openFile', title: 'Open the file', arguments: [n] };
-    return item;
+  getTreeItem(scanItem: ScanItem): vscode.TreeItem {
+    const treeItem = new vscode.TreeItem(scanItem.name, this.collapsibleState(scanItem));
+    treeItem.id = `${this.scanId}:${scanItem.path}`;
+    treeItem.iconPath = itemIcon(scanItem);
+    treeItem.description = itemDescription(scanItem);
+    treeItem.contextValue = itemContextValue(scanItem);
+    treeItem.tooltip = itemTooltip(scanItem);
+
+    if (itemKind(scanItem) === 'file') {
+      treeItem.command = { command: 'swh.scan.openFile', title: 'Open the file', arguments: [scanItem] };
+    }
+
+    return treeItem;
+  }
+
+  /**
+   * Whether a scan item is shown folded, unfolded, or cannot be.
+   *
+   * @param scanItem - The item.
+   * @returns `None` without children, else `Expanded` for the items unfolded
+   * after a scan, `Collapsed` for the others.
+   */
+  private collapsibleState(scanItem: ScanItem): vscode.TreeItemCollapsibleState {
+    if (!scanItem.children.length) return vscode.TreeItemCollapsibleState.None;
+    return this.expanded.has(scanItem) ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
   }
 
   /**
@@ -168,14 +242,17 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
       if (id !== this.scanId) return;
       const scan = buildScan(nodes);
       // archived directories start folded; the root always starts unfolded
-      for (const i of scan.items) if (i.dir && (i.status !== 'archived' || i === scan.root)) this.expanded.add(i);
+      for (const scanItem of scan.items) {
+        const unfolded = scanItem.dir && (scanItem.status !== 'archived' || scanItem === scan.root);
+        if (unfolded) this.expanded.add(scanItem);
+      }
       this.scan = scan;
       this.view.message = `${root} (tracked working tree)\n${scanSummary(scan)}`;
       this.view.description = `${scan.archivedFiles} of ${scan.files} files archived`;
       this.emitter.fire(undefined);
-    } catch (e) {
+    } catch (error) {
       if (id !== this.scanId) return;
-      this.view.message = `Scan failed: ${(e as Error)?.message ?? e}`;
+      this.view.message = `Scan failed: ${(error as Error)?.message ?? error}`;
       this.emitter.fire(undefined);
     }
   }

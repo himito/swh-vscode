@@ -98,9 +98,11 @@ export class SwhidLinks implements vscode.DocumentLinkProvider {
    */
   provideDocumentLinks(doc: vscode.TextDocument): vscode.DocumentLink[] {
     if (!config().get<boolean>('documentLinks.enabled', true)) return [];
+
     // a cheap test first: most documents hold no SWHID
     const text = doc.getText();
     if (!text.includes('swh:1:')) return [];
+
     return findSwhids(text).map(([start, swhid]) => {
       const range = new vscode.Range(doc.positionAt(start), doc.positionAt(start + swhid.length));
       const link = new vscode.DocumentLink(range, openSwhidUri(swhid));
