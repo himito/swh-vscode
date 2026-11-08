@@ -17,7 +17,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { browseUrl, buildScan, type Maybe, Scan, ScanItem, type ScanStatus, scanSummary, shortSwhid, Swh, typeOf, UserError } from '#core';
+import { browseUrl, buildScan, errorMessage, type Maybe, Scan, ScanItem, type ScanStatus, scanSummary, shortSwhid, Swh, typeOf, UserError } from '#core';
 import { archiveUrl, currentRepoRoot, info, openUrl } from './helpers';
 import { openSwhidUri } from './reports';
 
@@ -298,7 +298,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * @param error - What the scan threw.
    */
   private showFailure(error: unknown): void {
-    this.view.message = `Scan failed: ${(error as Error)?.message ?? error}`;
+    this.view.message = `Scan failed: ${errorMessage(error)}`;
     this.emitter.fire(undefined);
   }
 

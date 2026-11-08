@@ -42,3 +42,13 @@ export class Cancelled extends Error {
     this.name = 'Cancelled';
   }
 }
+
+/**
+ * The message of a thrown value, for display.
+ *
+ * @param error - Whatever was thrown: an `Error` or anything else.
+ * @returns The error's message, or the value as a string.
+ */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

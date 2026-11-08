@@ -11,7 +11,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Cancelled, UserError } from '#core';
+import { Cancelled, errorMessage, UserError } from '#core';
 
 /**
  * Wraps an async function as a command handler that reports its errors.
@@ -33,7 +33,7 @@ function command<A extends unknown[]>(fn: (...args: A) => Promise<unknown>) {
       if (error instanceof UserError) {
         void vscode.window.showWarningMessage(error.message);
       } else {
-        void vscode.window.showErrorMessage(`Software Heritage: ${(error as Error)?.message ?? error}`);
+        void vscode.window.showErrorMessage(`Software Heritage: ${errorMessage(error)}`);
       }
     }
   };

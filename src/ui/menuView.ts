@@ -17,7 +17,7 @@
 import * as vscode from 'vscode';
 import { config, WITHOUT_CONTEXT_SETTING, withoutContext } from './helpers';
 import { MENU, type MenuEntry, type MenuGroup } from './menu';
-import type { Maybe } from '#core';
+import { errorMessage, type Maybe } from '#core';
 
 /** A node of the Menu view's tree: a group, or one of its entries. */
 type MenuNode = MenuGroup | MenuEntry;
@@ -52,7 +52,7 @@ async function setWithoutContext(value: boolean): Promise<void> {
   try {
     await config().update(WITHOUT_CONTEXT_SETTING, value, target);
   } catch (error) {
-    void vscode.window.showErrorMessage(`Software Heritage: ${(error as Error)?.message ?? error}`);
+    void vscode.window.showErrorMessage(`Software Heritage: ${errorMessage(error)}`);
   }
 }
 
