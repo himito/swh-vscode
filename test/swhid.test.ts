@@ -219,6 +219,13 @@ test('citation', () => {
   assert.equal(citation('failed', cnt.qualify({ lines: LineRange.of(2, 3) })).entry.split(',')[0], '@codefragment{swh-cnt-94a9ed0-L2-L3');
   assert.equal(citation('failed', Swhid.of('dir', sha('9'))).entry.split('{')[0], '@softwareversion');
   assert.deepEqual(citation({ entry: '@x{}' }, cnt), { entry: '@x{}', why: 'archive' });
+  // LaTeX's special characters show as they are; braces stay balanced
+  const awkward = citation('failed', cnt.qualify({ origin: 'https://h/a{b' }), { title: 'my_repo{x} 50% & #1', url: 'https://h/a{b' }).entry;
+  assert.match(awkward, /title = \{my\\_repo\\textbraceleft\{\}x\\textbraceright\{\} 50\\% \\& \\#1\},/);
+  assert.match(awkward, /url = \{https:\/\/h\/a%7Bb\},/);
+  assert.match(awkward, /swhid = \{swh:1:cnt:94a9ed0[0-9a-f]*;origin=https:\/\/h\/a%7Bb\}/);
+  const depth = [...awkward].reduce((open, char) => open + (char === '{' ? 1 : char === '}' ? -1 : 0), 0);
+  assert.equal(depth, 0);
   // one line, and a release, a version of the software
   assert.equal(citation('failed', cnt.qualify({ lines: LineRange.of(5) })).entry.split(',')[0], '@codefragment{swh-cnt-94a9ed0-L5');
   assert.equal(citation('failed', Swhid.of('rel', sha('9'))).entry.split('{')[0], '@softwareversion');

@@ -76,6 +76,50 @@ function linesKey(lines: Maybe<LineRange>): string {
 const citationKey = (swhid: Swhid) => `swh-${swhid.type}-${swhid.shortHash}${linesKey(swhid.qualifiers.lines)}`;
 
 /**
+ * How LaTeX's special characters are written in text, so that they show as they are.
+ *
+ * @remarks
+ * Braces are written with commands, not as `\{` and `\}`: BibTeX counts a
+ * brace even after a backslash, and an unbalanced one breaks the whole entry.
+ */
+const LATEX_SPECIALS: Readonly<Record<string, string>> = {
+  '\\': '\\textbackslash{}',
+  '{': '\\textbraceleft{}',
+  '}': '\\textbraceright{}',
+  '#': '\\#',
+  $: '\\$',
+  '%': '\\%',
+  '&': '\\&',
+  _: '\\_',
+  '^': '\\textasciicircum{}',
+  '~': '\\textasciitilde{}',
+};
+
+/** The characters of {@link LATEX_SPECIALS}. */
+const LATEX_SPECIAL = /[\\{}#$%&_^~]/g;
+
+/**
+ * Writes text for a BibTeX field that LaTeX typesets, such as a title.
+ *
+ * @param text - The text, e.g. a repository's name.
+ * @returns `text` with LaTeX's special characters escaped, e.g. `my\_repo`.
+ */
+const latexText = (text: string) => text.replace(LATEX_SPECIAL, (char) => LATEX_SPECIALS[char]);
+
+/**
+ * Writes a URL or a SWHID for a BibTeX field that is taken verbatim, such as `url`.
+ *
+ * @remarks
+ * Only its braces are encoded, as `%7B` and `%7D`: BibTeX needs them
+ * balanced, and the URL, or the SWHID once its qualifiers are decoded, is
+ * the same.
+ *
+ * @param text - The URL or SWHID.
+ * @returns `text` without braces.
+ */
+const verbatimText = (text: string) => text.replace(/[{}]/g, (brace) => (brace === '{' ? '%7B' : '%7D'));
+
+/**
  * The fields of a BibTeX entry, by name, in the order they are written.
  *
  * @remarks
@@ -109,6 +153,9 @@ function bibtexEntry(type: string, key: string, fields: BibtexFields): string {
  * content, `@software` for a snapshot, `@softwareversion` otherwise), with a
  * key made as the archive makes it, e.g. `swh-cnt-67c1849-L1-L3` (see
  * `ENTRY_TYPES` and `citationKey`). Fields without a value are left out.
+ * The title is escaped for LaTeX, which typesets it (see `latexText`); the
+ * URL and the SWHID, taken verbatim, only lose their braces (see
+ * `verbatimText`): an unbalanced brace would break the whole entry.
  *
  * @param answer - What the archive answered, see {@link ArchiveApi.citation}.
  * @param swhid - The qualified SWHID cited, for the `swhid` field; its
@@ -127,11 +174,11 @@ export function citation(answer: CitationAnswer, swhid: Swhid, metadata: Citatio
 
   const day = metadata.date?.substring(0, 10);
   const entry = bibtexEntry(ENTRY_TYPES[swhid.type], citationKey(swhid), {
-    title: metadata.title,
-    url: metadata.url,
+    title: metadata.title && latexText(metadata.title),
+    url: metadata.url && verbatimText(metadata.url),
     date: day,
     year: day?.substring(0, 4),
-    swhid: swhid.toString(),
+    swhid: verbatimText(swhid.toString()),
   });
   return { entry, why: answer };
 }
