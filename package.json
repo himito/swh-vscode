@@ -2,7 +2,7 @@
   "name": "vscode-swh",
   "displayName": "SWH for VS Code",
   "description": "Software Heritage client: archive your code, cite it with a SWHID, and see which of your files are already archived.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "himito",
   "license": "GPL-3.0-or-later",
   "repository": {
