@@ -226,14 +226,14 @@ test('qualified SWHID, anchored and archived', async () => {
 test('status, unreachable archive, save', async () => {
   reset([], ['https://example.org/me/repo']);
   const s = swh();
-  const info = await s.origin(dir, true);
+  const info = await s.originWithUpstream(dir);
   assert.equal(info.origin, 'https://example.org/me/repo');
   assert.equal(info.archived, true);
   // the branch tracks no remote branch: no upstream
   assert.equal(info.upstream, undefined);
   const saved = await s.saveOrigin('https://example.org/me/repo');
   assert.deepEqual(saved, { origin: 'https://example.org/me/repo', status: 'accepted' });
-  await assert.rejects(s.saveOrigin('/srv/repo'), /not a public URL/);
+  await assert.rejects(s.saveOrigin('/srv/repo'), /^UserError: The origin \/srv\/repo is not a public URL$/);
 
   // the archive unreachable: the SWHID from Git alone
   const failing = globalThis.fetch;
@@ -322,6 +322,55 @@ test('the rate limit, from the headers', async () => {
   citationReply = [200, { content: '@x{}' }, { 'X-RateLimit-Limit': '120' }];
   await archive.citation({ swhid });
   assert.deepEqual(archive.rateLimit(), limit);
+});
+
+// The branch's upstream, when it is a remote branch: its commit, and whether
+// the archive holds it; asked only of an archived origin.
+test("the branch's upstream commit", async () => {
+  const head = git('rev-parse', 'HEAD');
+  git('update-ref', 'refs/remotes/origin/main', head);
+  git('branch', '-q', '--set-upstream-to=origin/main');
+  try {
+    reset(['swh:1:rev:' + head], ['https://example.org/me/repo']);
+    const status = await swh().originWithUpstream(dir);
+    assert.ok(status.upstream?.equals(Swhid.of('rev', head)));
+    assert.equal(status['upstream-archived'], true);
+
+    reset([], ['https://example.org/me/repo']);
+    assert.equal((await swh().originWithUpstream(dir))['upstream-archived'], false);
+
+    // the origin not archived: the upstream is not asked about
+    reset(['swh:1:rev:' + head]);
+    const unarchived = await swh().originWithUpstream(dir);
+    assert.equal(unarchived.upstream, undefined);
+    assert.ok(!asked.flat().includes('swh:1:rev:' + head));
+  } finally {
+    git('branch', '-q', '--unset-upstream');
+    git('update-ref', '-d', 'refs/remotes/origin/main');
+  }
+});
+
+// A repository's remote: the one Git would fetch from (here `origin`), else
+// the only remote, whatever its name; none when there are several others,
+// or none at all.
+test("a repository's remote", async () => {
+  const s = swh();
+  assert.equal(await s.originOf(dir), 'https://example.org/me/repo');
+
+  const other = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'swh-remote-')));
+  const run = (...args: string[]) => execFileSync('git', args, { cwd: other, encoding: 'utf8' });
+  try {
+    run('init', '-q', '-b', 'main');
+    assert.equal(await s.originOf(other), undefined, 'no remote');
+    run('remote', 'add', 'upstream', 'https://example.org/up/repo.git');
+    assert.equal(await s.originOf(other), 'https://example.org/up/repo', 'the only remote, not named origin');
+    run('remote', 'add', 'fork', 'https://example.org/fork/repo.git');
+    assert.equal(await s.originOf(other), undefined, 'several remotes, none named origin');
+    run('remote', 'add', 'origin', 'git@example.org:me/other.git');
+    assert.equal(await s.originOf(other), 'https://example.org/me/other', 'origin among several');
+  } finally {
+    await fs.rm(other, { recursive: true, force: true });
+  }
 });
 
 // The tokenless rate limit is shown only while it applies: not once a token

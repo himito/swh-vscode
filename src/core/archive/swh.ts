@@ -202,8 +202,13 @@ export class Swh {
   }
 
   /** {@inheritDoc Origins.origin} */
-  origin(root: string, upstream = false): Promise<OriginInfo> {
-    return this.origins.origin(root, upstream);
+  origin(root: string): Promise<OriginInfo> {
+    return this.origins.origin(root);
+  }
+
+  /** {@inheritDoc Origins.originWithUpstream} */
+  originWithUpstream(root: string): Promise<OriginInfo> {
+    return this.origins.originWithUpstream(root);
   }
 
   /** {@inheritDoc Origins.originQuiet} */

@@ -130,8 +130,7 @@ export class ArchiveCommands {
    */
   private async fetchOriginInfo(origin: Maybe<string>): Promise<OriginInfo> {
     if (origin) return this.ctx.swh.originStatus(origin);
-    const withUpstream = true;
-    return this.ctx.swh.origin(await this.ctx.repoRoot(), withUpstream);
+    return this.ctx.swh.originWithUpstream(await this.ctx.repoRoot());
   }
 
   /**
