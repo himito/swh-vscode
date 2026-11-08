@@ -1,10 +1,10 @@
 /**
- * Tests of the backend on a fake archive in memory, through {@link ArchiveApi}.
+ * Tests of the client on a fake archive in memory, through {@link ArchiveApi}.
  *
  * @remarks
  * {@link Swh} talks to the archive only through {@link ArchiveApi}:
  * these tests give it a fake one, with neither HTTP nor `fetch`, and check
- * the backend's own logic: memos, refresh, origin candidates, save requests.
+ * the client's own logic: memos, refresh, origin candidates, save requests.
  * Run them with `npm test`.
  *
  * @packageDocumentation
@@ -20,7 +20,7 @@ class FakeArchive implements ArchiveApi {
   knownCalls: string[][] = [];
   /** The origins of each `latestVisit` call, in order. */
   latestCalls: string[] = [];
-  /** Called during `known`, before answering, e.g. to refresh the backend meanwhile. */
+  /** Called during `known`, before answering, e.g. to refresh the client meanwhile. */
   duringKnown?: () => void;
   /** What `save` does: answer, or throw. */
   saveAnswer: () => SaveRequest = () => ({ origin: '', status: 'accepted' });
@@ -67,10 +67,10 @@ class FakeArchive implements ArchiveApi {
 }
 
 /**
- * A backend on a fake archive.
+ * A client on a fake archive.
  *
  * @param archive - The fake archive.
- * @returns The backend.
+ * @returns The client.
  */
 const swhOn = (archive: ArchiveApi) => new Swh({ git: new Git(), archive });
 
@@ -114,6 +114,16 @@ test("an origin's status tries its candidates in order", async () => {
 
   const none = await swhOn(new FakeArchive()).originStatus('https://example.org/me/other');
   assert.deepEqual(none, { origin: 'https://example.org/me/other', archived: false });
+});
+
+// The visits of a repository need its root; another's, its URL: there is no
+// way to ask with neither, which would ask about the process's directory.
+test("an origin's visits, by URL", async () => {
+  const visit = { date: '2026-07-01T10:00:00+00:00', status: 'full', snapshot: 'ab'.repeat(20) };
+  const archive = new FakeArchive(new Set(), new Map([['https://example.org/me/repo.git', visit]]));
+  const found = await swhOn(archive).visitsOf('https://example.org/me/repo');
+  assert.deepEqual(found, { origin: 'https://example.org/me/repo.git', visits: [visit] });
+  await assert.rejects(swhOn(archive).visitsOf('/srv/repo'), /Not a public repository URL/);
 });
 
 test('a save request forgets what it changes, even when it fails', async () => {

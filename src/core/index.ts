@@ -1,25 +1,26 @@
 /**
- * The extension's core: the backend (Git and the Software Heritage archive),
- * the {@link Swhid} value object, origins and their encodings, citations,
- * scans, and the error types.
+ * The extension's core: one package per concern, all re-exported here.
  *
  * @remarks
- * Nothing here imports `vscode`, which lets the unit tests run it with Node
- * alone; keep it so.
+ * - `shared/`: the error types, percent-encoding, small helpers;
+ * - `origin.ts`: origins, the URLs the archive knows repositories by;
+ * - `swhid/`: the {@link Swhid}, {@link Qualifiers} and {@link LineRange} value objects;
+ * - `git.ts`: running Git;
+ * - `archive/`: {@link Swh}, the Software Heritage client: what the archive holds, on Git and its Web API;
+ * - `citation/`: {@link Citation}, {@link Citer} and {@link BibtexEntry};
+ * - `scan.ts`: the scan of a repository as a tree.
+ *
+ * A package imports another only through its `index.ts`, and only one
+ * listed before it: there is no cycle between them. Nothing here imports
+ * `vscode`, which lets the unit tests run it with Node alone; keep it so.
  *
  * @packageDocumentation
  */
 
-export * from './backend';
-export * from './bibtex';
+export * from './archive';
 export * from './citation';
-export * from './citer';
-export * from './encoding';
-export * from './errors';
 export * from './git';
-export * from './http';
 export * from './origin';
 export * from './scan';
+export * from './shared';
 export * from './swhid';
-export * from './types';
-export * from './util';

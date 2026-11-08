@@ -8,7 +8,7 @@
  * each time the file is saved, and when the workspace or the `swh` settings
  * change. Answers are kept per path, together with the file's modification
  * time: switching back to an unchanged archived file checks nothing. Any
- * other status is checked again, which the backend's memo answers without
+ * other status is checked again, which the client's memo answers without
  * asking the archive when it asked it recently.
  *
  * Clicking the item runs `swh.statusBarCopy`, which copies the SWHID of the
@@ -147,7 +147,7 @@ type Entry = {
  * unchanged since, as what the archive holds stays there. Anything else is
  * checked again: a directory's stamp misses changes to the files in it, a
  * negative answer may no longer hold, and a failure may not happen again.
- * Checking again is cheap: the backend's memo answers what the archive was
+ * Checking again is cheap: the client's memo answers what the archive was
  * asked recently.
  *
  * @param target - The file or directory shown.
@@ -196,7 +196,7 @@ export class StatusBar implements vscode.Disposable {
   /**
    * Create the item and listen to the events that may change what it shows.
    *
-   * @param swh - The backend that answers the archival questions.
+   * @param swh - The client that answers the archival questions.
    */
   constructor(private readonly swh: Swh) {
     this.item.name = 'Software Heritage';

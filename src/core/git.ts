@@ -14,8 +14,7 @@ import { type ChildProcess, spawn } from 'child_process';
 import { promises as fs, type Stats } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { UserError } from './errors';
-import type { Maybe } from './types';
+import { type Maybe, UserError } from './shared';
 
 /** The exit status of a Git command that could not be run at all, e.g. Git is not installed. */
 export const GIT_NOT_RUN = -1;

@@ -1,5 +1,6 @@
 /**
- * HTTP requests.
+ * HTTP requests, for the implementation of `ArchiveApi` over the Web API
+ * (see `httpArchiveApi.ts`), its only user.
  *
  * @remarks
  * Requests go through the global `fetch`, and come back as a {@link Resp}
@@ -10,7 +11,7 @@
  * @packageDocumentation
  */
 
-import type { Maybe } from './types';
+import type { Maybe } from '../../shared';
 
 /**
  * The {@link Resp.body} of a response whose body is not JSON.

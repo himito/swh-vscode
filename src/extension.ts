@@ -1,5 +1,5 @@
 /**
- * The extension's entry point: creates the backend, the views and the status
+ * The extension's entry point: creates the Software Heritage client, the views and the status
  * bar item, and registers every command.
  *
  * @remarks
@@ -48,7 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
   const apiToken = new ApiToken(context.secrets);
   context.subscriptions.push(apiToken);
 
-  // the backend, on Git and on the archive's Web API, configured by the settings
+  // the Software Heritage client, on Git and on the archive's Web API, configured by the settings
   let statusBar: Maybe<StatusBar>;
   const archive = new HttpArchiveApi({
     archiveUrl,

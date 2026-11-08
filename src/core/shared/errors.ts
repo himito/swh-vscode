@@ -2,7 +2,7 @@
  * The error types the extension uses.
  *
  * @remarks
- * Every layer throws them: the backend, its HTTP implementation, and the commands.
+ * Every layer throws them: the Software Heritage client, its HTTP implementation, and the commands.
  * This module must not import `vscode`.
  *
  * @packageDocumentation

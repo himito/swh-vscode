@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { browseUrl, isPublicOrigin, type LineRange, type Maybe, normalizeOrigin, type SwhidInfo } from '#core';
+import { browseUrl, isPublicOrigin, type LineRange, markdownText, markdownUrl, type Maybe, normalizeOrigin, type SwhidInfo } from '#core';
 import { archiveUrl, ask, busy, info, openUrl } from '../helpers';
 import type { ArchiveCommands } from './archive';
 import type { CommandInput, CommandContext, Target } from './context';
@@ -45,12 +45,18 @@ type LabeledText = {
 
 /** A SWHID command's text and label, with the SWHID it comes from. */
 type SwhidResult = LabeledText & {
-  /** The target's SWHID, as the backend computed it. */
+  /** The target's SWHID, as the client computed it. */
   swhidInfo: SwhidInfo;
 };
 
 /**
  * A Markdown link to a target in the archive, `[file, lines A-B](url)`.
+ *
+ * @remarks
+ * The file name is escaped, so that e.g. `__init__.py` does not show as a
+ * bold "init", and the URL's parentheses encoded, so that a `)` in the
+ * SWHID's origin does not end the link (see {@link core!markdownText} and
+ * {@link core!markdownUrl}).
  *
  * @param targetPath - The target's path; its base name is the link's text.
  * @param lines - The lines, if any.
@@ -58,9 +64,9 @@ type SwhidResult = LabeledText & {
  * @returns The link.
  */
 function markdownLink(targetPath: string, lines: Maybe<LineRange>, url: string): string {
-  const name = path.basename(targetPath);
+  const name = markdownText(path.basename(targetPath));
   const text = lines ? `${name}, lines ${lines}` : name;
-  return `[${text}](${url})`;
+  return `[${text}](${markdownUrl(url)})`;
 }
 
 /**
@@ -80,7 +86,7 @@ export class SwhidCommands {
   /**
    * Creates the commands.
    *
-   * @param ctx - The backend, and what the commands are about.
+   * @param ctx - The client, and what the commands are about.
    * @param archive - The archive commands, to send the save requests offered.
    */
   constructor(
@@ -129,7 +135,7 @@ export class SwhidCommands {
    *
    * @param target - The file (with its selected lines) or directory.
    * @param request - What to produce.
-   * @returns The SWHID as the backend computed it, the text, and its label.
+   * @returns The SWHID as the client computed it, the text, and its label.
    * @throws {@link core!UserError} when Git fails.
    */
   private async computeSwhidText(target: Target, request: SwhidRequest): Promise<SwhidResult> {
@@ -141,7 +147,7 @@ export class SwhidCommands {
   /**
    * The text a SWHID command produces, and a label saying what it is.
    *
-   * @param swhidInfo - The SWHID of the target, as the backend computed it.
+   * @param swhidInfo - The SWHID of the target, as the client computed it.
    * @param request - What to produce, and for which target.
    * @returns The text, and its label for the messages.
    * @throws {@link core!UserError} as {@link SwhidCommands.bibtexText} does, for a citation.
@@ -182,7 +188,7 @@ export class SwhidCommands {
   /**
    * Tells what was just copied: whether the archive holds it, and which version.
    *
-   * @param swhidInfo - The SWHID copied, as the backend computed it.
+   * @param swhidInfo - The SWHID copied, as the client computed it.
    * @param label - What was copied, for the message.
    * @param targetPath - The target's path.
    * @throws {@link core!UserError} as {@link SwhidCommands.swhidUnarchived} does.

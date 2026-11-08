@@ -9,23 +9,22 @@
 # regenerates the file: do not run `git cliff -o CHANGELOG.md`, which would
 # replace the curated releases with the commits.
 #
-# - Write upcoming changes by hand under `## [Unreleased]`, if you like.
 # - `npm run changelog` previews the entries the commits since the last tag
-#   give, without writing anything.
+#   give, without writing anything: what the next release will draft.
 # - At release time, `npm run changelog:release` drafts the release of the
-#   version in package.json right below `## [Unreleased]` (`--prepend`): its
-#   heading, then the entries from the commits, then what was written under
-#   `[Unreleased]`, which thereby becomes part of the release. Curate it
-#   (merge the sections that appear twice, reword) before tagging; it is kept
-#   as written from then on.
+#   version in package.json right below the header (`--prepend`), above the
+#   releases already there: its heading and date, then the entries from the
+#   commits. Curate it (reword the entries for users, add what the commits
+#   do not say) before tagging; it is kept as written from then on.
 #
 # Each release's heading links to what changed since the previous one: a
 # link in the heading itself, as --prepend cannot update reference links at
 # the bottom of the file.
 
 [changelog]
-# `--prepend` replaces the header at the top of the file and drafts the new
-# release right below it: `[Unreleased]` stays first.
+# `--prepend` replaces this header at the top of the file, and drafts the
+# new release right below it, above the releases already there. It must be
+# exactly how the file starts, or the file would get a second header.
 header = """
 # Changelog
 
@@ -34,11 +33,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
 """
 # One release, with its link. Without a version (the preview of the commits
-# since the last tag), a plain line instead of a heading: `[Unreleased]` is
-# the header's.
+# since the last tag), a plain line instead of a heading.
 body = """
 {%- set repo = "https://github.com/himito/vscode-swh" -%}
 {%- if version and previous.version -%}

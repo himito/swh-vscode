@@ -1,5 +1,5 @@
 /**
- * Unit tests of the mapping from the archive's JSON answers to the backend's types (`adapters/json.ts`).
+ * Unit tests of the mapping from the archive's JSON answers to the client's types (`adapters/json.ts`).
  *
  * @remarks
  * These tests need neither VS Code, Git nor the network. Run them with `npm test`.
@@ -9,7 +9,7 @@
 
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { toCitationEntry, toKnown, toSaveRequest, toVisit, toVisits } from '#core/backend/adapters/json';
+import { toCitationEntry, toKnown, toSaveRequest, toVisit, toVisits } from '#core/archive/adapters/json';
 import { UserError } from '#core';
 
 test('toVisit keeps the fields of a well-formed visit', () => {

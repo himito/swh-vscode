@@ -20,6 +20,8 @@ import {
   findSwhids,
   LineRange,
   normalizeOrigin,
+  markdownText,
+  markdownUrl,
   originCandidates,
   originName,
   parseOrigin,
@@ -165,6 +167,14 @@ test('helpers', () => {
 
 // A line range is a value: made checked from line numbers or text, and
 // written as the `lines` qualifier writes it.
+// Markdown: names show as they are, and a `)` does not end a link's URL.
+test('markdown', () => {
+  assert.equal(markdownText('__init__.py'), '\\_\\_init\\_\\_.py');
+  assert.equal(markdownText('a*b* [c] `d` <e> & \\f'), 'a\\*b\\* \\[c\\] \\`d\\` \\<e\\> \\& \\\\f');
+  assert.equal(markdownText('plain-name.txt'), 'plain-name.txt');
+  assert.equal(markdownUrl('https://h/swh:1:cnt:x;origin=https://h/a(b)c'), 'https://h/swh:1:cnt:x;origin=https://h/a%28b%29c');
+});
+
 test('LineRange', () => {
   assert.equal(LineRange.of(2, 3).toString(), '2-3');
   assert.equal(LineRange.of(5).toString(), '5');
@@ -191,6 +201,10 @@ test('Swhid.isValid', () => {
   assert.ok(!Swhid.isValid(`swh:2:cnt:${hash}`));
   assert.ok(!Swhid.isValid(`swh:1:cnt:${hash.toUpperCase()}`));
   assert.ok(!Swhid.isValid(` swh:1:cnt:${hash}`));
+  // a SWHID holds no blank: an origin's are encoded
+  assert.ok(!Swhid.isValid(`swh:1:cnt:${hash};origin=https://h/a b`));
+  assert.ok(!Swhid.isValid(`swh:1:cnt:${hash};origin=https://h/a\tb`));
+  assert.ok(Swhid.isValid(`swh:1:cnt:${hash};origin=https://h/a%20b`));
 });
 
 // SWHIDs are found in text with their qualifiers but without trailing

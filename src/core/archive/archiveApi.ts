@@ -1,5 +1,5 @@
 /**
- * What the backend asks the Software Heritage archive: the {@link ArchiveApi} interface.
+ * What the client asks the Software Heritage archive: the {@link ArchiveApi} interface.
  *
  * @remarks
  * {@link Swh} asks the archive only through {@link ArchiveApi}, in its own
@@ -15,7 +15,7 @@
  * @packageDocumentation
  */
 
-import type { Maybe } from '../types';
+import type { Maybe } from '../shared';
 import type { CitationAnswer, SaveRequest, Visit } from './types';
 
 /**
@@ -66,7 +66,7 @@ export type RateLimit = {
 };
 
 /**
- * What the backend asks the Software Heritage archive.
+ * What the client asks the Software Heritage archive.
  *
  * @remarks
  * Every method that asks the archive throws a {@link UserError} when the

@@ -1,5 +1,5 @@
 /**
- * Tests of the backend on a real Git repository with a fake archive.
+ * Tests of the client on a real Git repository with a fake archive.
  *
  * @remarks
  * One temporary repository serves the whole file, and `globalThis.fetch` is
@@ -98,10 +98,10 @@ after(async () => {
 });
 
 /**
- * A backend talking to the fake archive.
+ * A client talking to the fake archive.
  *
  * @param token - The API token it sends, if any.
- * @returns A fresh backend, its memos empty.
+ * @returns A fresh client, its memos empty.
  */
 function swh(token?: string) {
   return new Swh({

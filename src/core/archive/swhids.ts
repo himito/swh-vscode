@@ -8,13 +8,12 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { relativePath } from '../git';
-import { UserError } from '../errors';
+import { type Maybe, UserError } from '../shared';
 import { isPublicOrigin } from '../origin';
 import { type LineRange, Swhid } from '../swhid';
 import { uniq } from './memo';
 import { SwhOrigins } from './origins';
 import type { FileStatus, SwhidInfo } from './types';
-import type { Maybe } from '../types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

@@ -4,7 +4,7 @@
  *
  * @remarks
  * {@link Citer} asks the archive and Git: these tests give it a stub
- * backend instead, which answers as told and records what it is asked. They
+ * client instead, which answers as told and records what it is asked. They
  * check which questions are asked, and what the entries hold. The minimal
  * entry itself is tested in `swhid.test.ts`. Run them with `npm test`.
  *
@@ -33,7 +33,7 @@ const sha = (digit: string) => digit.repeat(40);
 /** The date the stub's Git gives for any commit. */
 const COMMIT_DATE = '2026-07-01';
 
-/** What the stub backend answers. */
+/** What the stub client answers. */
 type Answers = {
   /** The archive's answer to any citation request. */
   citation?: CitationAnswer;
@@ -41,7 +41,7 @@ type Answers = {
   origin?: OriginInfo;
 };
 
-/** What the stub backend was asked. */
+/** What the stub client was asked. */
 type Asked = {
   /** The citation requests sent to the archive. */
   citations: CitationTarget[];
@@ -50,10 +50,10 @@ type Asked = {
 };
 
 /**
- * A backend that answers as told, and records what it is asked.
+ * A client that answers as told, and records what it is asked.
  *
  * @param answers - What it answers.
- * @returns The backend, as {@link Citer} uses it, and what it was asked.
+ * @returns The client, as {@link Citer} uses it, and what it was asked.
  */
 function stubSwh(answers: Answers = {}): { swh: Swh; asked: Asked } {
   const asked: Asked = { citations: [], git: [] };

@@ -1,12 +1,12 @@
 /**
- * The Software Heritage backend: everything the extension asks the archive
- * or Git, behind the single class {@link Swh}.
+ * The Software Heritage client, {@link Swh}: everything the extension asks
+ * the archive, or Git about what the archive holds.
  *
  * @remarks
  * SWHIDs are computed with Git, and the archive is asked whether it holds
  * them.
  *
- * The backend talks to the archive through an interface, {@link ArchiveApi},
+ * {@link Swh} talks to the archive through an interface, {@link ArchiveApi},
  * in its own terms; it never sees HTTP. {@link HttpArchiveApi} (in
  * `adapters/`) implements the interface over the archive's Web API
  * (`/api/1`).
@@ -27,15 +27,13 @@
  * @packageDocumentation
  */
 
-import { UserError } from '../errors';
+import { ancestors, type Maybe, UserError } from '../shared';
 import { relativePath } from '../git';
 import { isPublicOrigin } from '../origin';
 import { Swhid } from '../swhid';
-import { ancestors } from '../util';
 import { forgetNegatives } from './memo';
 import { SwhSwhids } from './swhids';
 import type { TreeNode } from './types';
-import type { Maybe } from '../types';
 
 export { HttpArchiveApi, type HttpArchiveDeps, KNOWN_BATCH_SIZE } from './adapters/httpArchiveApi';
 export { type ArchiveApi, type CitationTarget, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from './archiveApi';

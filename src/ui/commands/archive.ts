@@ -57,7 +57,7 @@ export class ArchiveCommands {
   /**
    * Creates the commands.
    *
-   * @param ctx - The backend, and what the commands are about.
+   * @param ctx - The client, and what the commands are about.
    */
   constructor(private readonly ctx: CommandContext) { }
 
@@ -179,7 +179,7 @@ export class ArchiveCommands {
    * archive cannot be reached or refuses the request.
    */
   private async fetchVisits(origin: Maybe<string>): Promise<OriginVisits> {
-    if (origin) return this.ctx.swh.visits(undefined, origin);
+    if (origin) return this.ctx.swh.visitsOf(origin);
     return this.ctx.swh.visits(await this.ctx.repoRoot());
   }
 

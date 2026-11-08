@@ -9,12 +9,11 @@
  */
 
 import * as path from 'path';
-import type { CitationAnswer, OriginInfo, Swh, SwhidInfo } from './backend';
+import type { CitationAnswer, OriginInfo, Swh, SwhidInfo } from '../archive';
 import { Citation, type CitationMetadata } from './citation';
-import { UserError } from './errors';
-import { isPublicOrigin, originName } from './origin';
-import { Swhid } from './swhid';
-import type { Maybe } from './types';
+import { type Maybe, UserError } from '../shared';
+import { isPublicOrigin, originName } from '../origin';
+import { Swhid } from '../swhid';
 
 /**
  * Cites archived code: a file, its lines, a directory, or a repository.
@@ -23,13 +22,13 @@ import type { Maybe } from './types';
  * The archive makes the entry when it can, from the repository's
  * `codemeta.json` or `CITATION.cff`; otherwise a minimal one is made from
  * the repository (see {@link Citation.minimal}). One instance serves the
- * whole extension: it holds nothing but the backend.
+ * whole extension: it holds nothing but the client.
  */
 export class Citer {
   /**
    * Creates the service.
    *
-   * @param swh - The backend, to ask the archive and Git.
+   * @param swh - The client, to ask the archive and Git.
    */
   constructor(private readonly swh: Swh) {}
 

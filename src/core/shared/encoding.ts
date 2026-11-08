@@ -1,11 +1,42 @@
 /**
- * Percent-encoding, and the URLs built with it.
+ * Percent-encoding and the URLs built with it, and Markdown's escaping.
  *
  * @remarks
  * Every function here is pure. This module must not import `vscode`.
  *
  * @packageDocumentation
  */
+
+/**
+ * The characters Markdown gives a meaning to in text: escapes, emphasis,
+ * code, link text, HTML and its entities.
+ */
+const MARKDOWN_SPECIAL = /[\\`*_[\]<>&]/g;
+
+/**
+ * Escapes text for Markdown, so that it shows as it is, e.g. as a link's text.
+ *
+ * @param text - The text, e.g. a file name.
+ * @returns `text` with each of Markdown's special characters escaped with a backslash.
+ *
+ * @example
+ * ```ts
+ * markdownText('__init__.py'); // '\\_\\_init\\_\\_.py', not the bold "init"
+ * ```
+ */
+export const markdownText = (text: string) => text.replace(MARKDOWN_SPECIAL, (char) => `\\${char}`);
+
+/**
+ * Writes a URL as the destination of a Markdown link.
+ *
+ * @remarks
+ * Its parentheses are percent-encoded: a `)` would end the destination,
+ * e.g. in a SWHID whose origin holds one. The URL is the same.
+ *
+ * @param url - The URL, without blanks, as a SWHID's permalink is.
+ * @returns `url` without parentheses.
+ */
+export const markdownUrl = (url: string) => url.replace(/[()]/g, (paren) => (paren === '(' ? '%28' : '%29'));
 
 /**
  * Removes the trailing slashes of a base URL setting.

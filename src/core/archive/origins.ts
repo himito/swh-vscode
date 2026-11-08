@@ -5,13 +5,12 @@
  * @packageDocumentation
  */
 
-import { UserError } from '../errors';
+import { type Maybe, UserError } from '../shared';
 import { isPublicOrigin, normalizeOrigin, originCandidates } from '../origin';
 import { Swhid } from '../swhid';
 import { forgetNegatives, fresh, Memo, MEMO_TTL, memoPut } from './memo';
 import { SwhKnown } from './known';
 import type { OriginInfo, OriginVisits, SaveRequest, Visit } from './types';
-import type { Maybe } from '../types';
 
 /** How many of an origin's latest visits {@link Swh.visits} gives. */
 export const VISITS_SHOWN = 10;
@@ -183,18 +182,27 @@ export class SwhOrigins extends SwhKnown {
   }
 
   /**
-   * The last ten archival visits of a repository's origin, or of a public origin.
+   * The last {@link VISITS_SHOWN} archival visits of a repository's origin.
    *
-   * @param root - The repository's root directory; ignored when `origin` is given.
-   * @param origin - A public repository URL to ask about instead.
+   * @param root - The repository's root directory.
    * @returns The origin URL and its visits, most recent first; none when it
    * is not archived.
-   * @throws {@link UserError} when there is no remote, `origin` is not
-   * public, or the archive cannot answer.
+   * @throws {@link UserError} when there is no remote, or the archive cannot answer.
    */
-  async visits(root: Maybe<string>, origin?: string): Promise<OriginVisits> {
-    if (origin) return this.originVisits(await this.originStatus(origin));
-    return this.originVisits(await this.origin(root!));
+  async visits(root: string): Promise<OriginVisits> {
+    return this.originVisits(await this.origin(root));
+  }
+
+  /**
+   * The last {@link VISITS_SHOWN} archival visits of a public repository, by URL.
+   *
+   * @param origin - The repository's public URL.
+   * @returns The origin URL, as the archive holds it, and its visits, most
+   * recent first; none when it is not archived.
+   * @throws {@link UserError} when `origin` is not public, or the archive cannot answer.
+   */
+  async visitsOf(origin: string): Promise<OriginVisits> {
+    return this.originVisits(await this.originStatus(origin));
   }
 
   /**

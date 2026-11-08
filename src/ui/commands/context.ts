@@ -1,5 +1,5 @@
 /**
- * What every group of commands shares: the backend, the citations, and
+ * What every group of commands shares: the client, the citations, and
  * "where the user is".
  *
  * @remarks
@@ -84,17 +84,17 @@ function originInputError(input: string): Maybe<string> {
 }
 
 /**
- * The backend and the citations, and what the commands are about: the
+ * The client and the citations, and what the commands are about: the
  * target, the repository, its origin.
  */
 export class CommandContext {
-  /** Cites files, directories and repositories, with the backend. */
+  /** Cites files, directories and repositories, with the client. */
   readonly citer: Citer;
 
   /**
    * Creates the context.
    *
-   * @param swh - The backend that talks to Git and the archive.
+   * @param swh - The client that talks to Git and the archive.
    * @param reports - Where the visits and citation reports are shown.
    * @param onArchiveChange - Called when what the archive holds may have changed.
    */

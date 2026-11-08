@@ -1,19 +1,18 @@
 /**
- * The mapping from the archive's JSON answers to the backend's own types.
+ * The mapping from the archive's JSON answers to the archive package's own types.
  *
  * @remarks
  * Part of the HTTP implementation of `ArchiveApi` (see `httpArchiveApi.ts`).
  * The archive's JSON is not under our control: a field may be missing,
  * `null` or of another type. Each `Api*` type says what the answer may hold,
  * every field `unknown`; each `to*` function checks the fields it needs and
- * builds a value of the type the backend relies on. These functions are pure: they neither send
- * requests nor read settings.
+ * builds a value of the type {@link Swh} relies on. These functions are
+ * pure: they neither send requests nor read settings.
  *
  * @packageDocumentation
  */
 
-import { UserError } from '../../errors';
-import type { Maybe } from '../../types';
+import { type Maybe, UserError } from '../../shared';
 import type { SaveRequest, Visit } from '../types';
 
 /** A SHA-1 in hexadecimal, as snapshot identifiers are. */

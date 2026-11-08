@@ -15,7 +15,7 @@ export class CitationCommands {
   /**
    * Creates the commands.
    *
-   * @param ctx - The backend, and what the commands are about.
+   * @param ctx - The client, and what the commands are about.
    * @param swhid - The SWHID commands, to cite a file, selection or directory.
    */
   constructor(

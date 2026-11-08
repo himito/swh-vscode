@@ -2,16 +2,16 @@
  * The scan of a repository as a tree, and its figures.
  *
  * @remarks
- * The backend's scan gives a flat list of {@link TreeNode}s; this module
+ * {@link Swh.tree} gives a flat list of {@link TreeNode}s; this module
  * turns it into the tree the Scan view shows, and counts what is archived.
  * Its functions are pure, and it must not import `vscode`.
  *
  * @packageDocumentation
  */
 
-import type { TreeNode } from './backend';
+import type { TreeNode } from './archive';
 import type { Swhid } from './swhid';
-import { ancestors } from './util';
+import { ancestors } from './shared';
 
 /**
  * The archival status of a scanned item.

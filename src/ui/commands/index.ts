@@ -5,7 +5,7 @@
  * @remarks
  * {@link Commands} builds the groups; those that need it share one
  * {@link CommandContext}, which finds "where the user is" and holds the
- * backend. Each public method of a
+ * Software Heritage client. Each public method of a
  * group implements one or more commands registered in `extension.ts`, except
  * {@link ArchiveCommands.doSave}, which the SWHID commands also use. They talk
  * to the archive through {@link Swh}, show their results with the helpers of
@@ -35,7 +35,7 @@ export * from './swhid';
 
 /** The extension's commands, by group, sharing one context. */
 export class Commands {
-  /** The backend, and what the commands are about. */
+  /** The client, and what the commands are about. */
   readonly context: CommandContext;
   /** Archival status, visits, save requests and refresh. */
   readonly archive: ArchiveCommands;
@@ -49,7 +49,7 @@ export class Commands {
   /**
    * Creates the commands.
    *
-   * @param swh - The backend that talks to Git and the archive.
+   * @param swh - The client that talks to Git and the archive.
    * @param reports - Where the visits and citation reports are shown.
    * @param onArchiveChange - Called when what the archive holds may have changed.
    */

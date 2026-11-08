@@ -8,9 +8,7 @@
  * @packageDocumentation
  */
 
-import { hexify } from './encoding';
-import { UserError } from './errors';
-import type { Maybe } from './types';
+import { hexify, type Maybe, UserError } from './shared';
 
 /**
  * Converts a Git remote URL into the origin URL the archive knows it by.

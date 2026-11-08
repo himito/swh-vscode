@@ -9,7 +9,7 @@
  * Archived directories start folded: everything under them is archived too.
  *
  * The tree itself is computed by {@link buildScan} from the nodes the
- * backend returns; this module only displays it and handles the actions on
+ * client returns; this module only displays it and handles the actions on
  * its items: open the file, open the item in the archive, copy its SWHID.
  *
  * @packageDocumentation
@@ -150,7 +150,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
   /**
    * Create the Scan view, empty until the first scan.
    *
-   * @param swh - The backend that computes the archival status of the tree.
+   * @param swh - The client that computes the archival status of the tree.
    */
   constructor(private readonly swh: Swh) {
     this.view = vscode.window.createTreeView(SCAN_VIEW_ID, { treeDataProvider: this, showCollapseAll: true });
@@ -234,7 +234,7 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * Scan the current repository, and show the result in the view.
    *
    * @remarks
-   * The view is focused and shows "Scanning…" while the backend works. The
+   * The view is focused and shows "Scanning…" while the client works. The
    * view's message then gives the repository and the figures of the scan; its description gives the
    * number of archived files. A failure is shown in the view's message. When
    * a newer scan has started meanwhile, the result is dropped.

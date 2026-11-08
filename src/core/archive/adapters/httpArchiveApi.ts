@@ -3,7 +3,7 @@
  *
  * @remarks
  * {@link HttpArchiveApi} turns each question of the interface into a request to
- * the archive's Web API (`/api/1`), and its answer back into the backend's
+ * the archive's Web API (`/api/1`), and its answer back into the package's own
  * types (see `json.ts`). Everything about HTTP stays here: URLs, headers, the
  * API token, status codes, the size of the batches, and the tokenless rate
  * limit, read from the answers' `X-RateLimit-*` headers.
@@ -11,11 +11,9 @@
  * @packageDocumentation
  */
 
-import { UserError } from '../../errors';
-import { headerNumber, is2xx, NOT_JSON, type Resp, retrieve } from '../../http';
-import { baseUrl, queryString } from '../../encoding';
+import { baseUrl, type Maybe, queryString, UserError } from '../../shared';
+import { headerNumber, is2xx, NOT_JSON, type Resp, retrieve } from './http';
 import { pathOrigin } from '../../origin';
-import type { Maybe } from '../../types';
 import { now, partition } from '../memo';
 import { type ArchiveApi, type CitationTarget, type LatestVisit, RATE_LIMIT_MESSAGE, type RateLimit } from '../archiveApi';
 import type { CitationAnswer, SaveRequest, Token, Visit } from '../types';

@@ -6,7 +6,7 @@
 
 import type { Git } from '../git';
 import type { Swhid } from '../swhid';
-import type { Maybe } from '../types';
+import type { Maybe } from '../shared';
 import { Memo, memoGet, memoPut, now, uniq, UNKNOWN } from './memo';
 import type { ArchiveApi } from './archiveApi';
 import type { SwhDeps } from './types';
@@ -26,7 +26,7 @@ export class SwhKnown {
   protected memoEpoch = 0;
 
   /**
-   * Creates the backend.
+   * Creates the client.
    *
    * @param deps - Git, and the archive.
    */
