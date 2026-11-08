@@ -97,12 +97,29 @@ test('known SWHIDs are asked once, and remembered', async () => {
   assert.deepEqual(archive.knownCalls[1], [b]);
 });
 
-test('an answer from before a refresh is not remembered', async () => {
+// A refresh while the archive is asked forgets what is not held, not what
+// is: an answer that arrives after it is remembered only if it says "held".
+// Forgetting everything (another archive) drops every answer in flight.
+test('an answer from before a refresh is remembered only if it says held', async () => {
   const archive = new FakeArchive(new Set([a]));
   const s = swhOn(archive);
   archive.duringKnown = () => s.refresh();
-  await s.rememberKnown([A]);
-  assert.equal(s.isKnownArchived(A), false);
+  await s.rememberKnown([A, B]);
+  assert.equal(s.isKnownArchived(A), true, 'held: still true after the refresh');
+  archive.duringKnown = undefined;
+  await s.rememberKnown([A, B]);
+  assert.deepEqual(archive.knownCalls[1], [b], 'not held: asked again');
+
+  const refreshed = new FakeArchive(new Set([a]));
+  const t = swhOn(refreshed);
+  refreshed.duringKnown = () => t.refresh();
+  assert.equal(await t.isArchived(A), true, 'what the caller gets');
+
+  const switched = new FakeArchive(new Set([a]));
+  const u = swhOn(switched);
+  switched.duringKnown = () => u.forgetAll();
+  await u.rememberKnown([A]);
+  assert.equal(u.isKnownArchived(A), false, 'the answer of the archive before');
 });
 
 test("an origin's status tries its candidates in order", async () => {

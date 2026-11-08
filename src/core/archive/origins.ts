@@ -203,7 +203,7 @@ export class Origins {
    *
    * @remarks
    * Remembered by remote URL for `MEMO_TTL` seconds, unless the memo forgot
-   * answers while the archive was asked.
+   * its origin while the archive was asked.
    *
    * @param root - The repository's root directory.
    * @returns Its status, or `null` without a remote.

@@ -43,6 +43,25 @@ type LabeledText = {
   label: string;
 };
 
+/**
+ * What a SWHID command produced, before the user is told about it.
+ *
+ * @remarks
+ * Telling may wait on the user, to answer a save request offered: a caller
+ * that shows the text, e.g. in a report, does so before {@link Produced.report}.
+ */
+export type Produced = {
+  /** The text copied or opened. */
+  text: string;
+  /**
+   * Tells the user what was copied or opened, and offers a save request
+   * when the archive does not hold it.
+   *
+   * @throws {@link core!UserError} when a save request the user accepts fails.
+   */
+  report: () => Promise<void>;
+};
+
 /** A SWHID command's text and label, with the SWHID it comes from. */
 type SwhidResult = LabeledText & {
   /** The target's SWHID, as the client computed it. */
@@ -108,11 +127,26 @@ export class SwhidCommands {
    * @param what - What to produce.
    * @param input - What the command was run with: the target, or the `bare` option.
    * @returns The text copied or opened.
-   * @throws {@link core!UserError} when there is no target, it is not a local file,
-   * the user declines to save a modified file, Git fails, or a save request
-   * the user accepts fails.
+   * @throws {@link core!UserError} as {@link SwhidCommands.produce} does, or
+   * when a save request the user accepts fails.
    */
   async swhidCopy(what: What, input?: CommandInput): Promise<string> {
+    const produced = await this.produce(what, input);
+    await produced.report();
+    return produced.text;
+  }
+
+  /**
+   * Copies or opens what {@link SwhidCommands.swhidCopy} does, and leaves
+   * telling the user about it to the caller.
+   *
+   * @param what - What to produce.
+   * @param input - What the command was run with: the target, or the `bare` option.
+   * @returns The text copied or opened, and how to tell the user about it.
+   * @throws {@link core!UserError} when there is no target, it is not a local
+   * file, the user declines to save a modified file, or Git fails.
+   */
+  async produce(what: What, input?: CommandInput): Promise<Produced> {
     const bare = this.ctx.bare(input);
     const target = await this.ctx.target(this.ctx.uriOf(input));
     const { swhidInfo, text, label } = await busy('Software Heritage: computing the SWHID…', () =>
@@ -121,13 +155,13 @@ export class SwhidCommands {
 
     if (what === 'open' && swhidInfo.archived) {
       await openUrl(browseUrl(archiveUrl(), text));
-      info('Opening in the Software Heritage archive');
-      return text;
+      const report = async () => info('Opening in the Software Heritage archive');
+      return { text, report };
     }
 
     await vscode.env.clipboard.writeText(text);
-    await this.reportCopied(swhidInfo, label, target.path);
-    return text;
+    const report = () => this.reportCopied(swhidInfo, label, target.path);
+    return { text, report };
   }
 
   /**

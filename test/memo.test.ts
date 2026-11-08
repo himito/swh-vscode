@@ -66,15 +66,18 @@ test('trusts every answer for the TTL', () => {
   assert.equal(memo.get('origin'), undefined);
 });
 
-// An answer asked for before the memo forgot may be out of date: it is ignored.
-test('ignores an answer asked for before the memo forgot', () => {
+// An answer asked for before the memo forgot may be out of date: it is
+// ignored if what the memo forgot since would have included it.
+test('ignores an answer asked for before the memo forgot it', () => {
   const memo = new Memo<boolean>({ ttl: MEMO_TTL, keepPositives: true });
   const asOf = memo.generation;
-  memo.forget(() => false);
+  memo.forget((known) => !known);
   // the generation changes even when nothing is forgotten
   assert.notEqual(memo.generation, asOf);
-  assert.equal(memo.put('swhid', false, asOf), false);
+  assert.equal(memo.put('swhid', false, asOf), false, 'would have been forgotten');
   assert.ok(!memo.has('swhid'));
+  assert.equal(memo.put('held', true, asOf), true, 'would have been kept');
+  assert.ok(memo.has('held'));
 
   const afterClear = memo.generation;
   memo.clear();

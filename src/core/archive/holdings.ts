@@ -55,8 +55,9 @@ export class Holdings {
    *
    * @remarks
    * The answers are remembered, where {@link Holdings.isKnownArchived}
-   * reads them. Answers that arrive after the memo forgot answers (see
-   * {@link Holdings.forgetNegatives}) are not. The archive is asked about the
+   * reads them, unless the memo forgot them while the archive was asked:
+   * a "not archived" after {@link Holdings.forgetNegatives}, any after
+   * {@link Holdings.forgetAll}. The archive is asked about the
    * SWHIDs' canonical texts.
    *
    * @param swhids - Core SWHIDs; duplicates are asked once.

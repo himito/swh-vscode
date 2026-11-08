@@ -33,18 +33,28 @@ export class CitationCommands {
    * without them, or when the target is not archived, a minimal entry is
    * made. With no file open and no file or folder given, cites the current
    * directory when its repository has a public origin; otherwise asks for a
-   * repository and cites its latest snapshot.
+   * repository and cites its latest snapshot. The report opens before the
+   * message about a file or directory, which may offer a save request and
+   * wait for the answer.
    *
    * @param askOrigin - Whether to ask for another repository's URL; `false` by default.
    * @param input - What the command was run with: the file or folder to cite, if any.
    * @throws {@link core!Cancelled} when the user dismisses the prompt.
    * @throws {@link core!UserError} when there is nothing to cite, the repository
-   * asked for is not archived, or the archive cannot be reached.
+   * asked for is not archived, the archive cannot be reached, or a save
+   * request the user accepts fails.
    */
   async cite(askOrigin = false, input?: CommandInput): Promise<void> {
     const origin = await this.citedOrigin(askOrigin, input);
-    const entry = origin ? await this.citeOrigin(origin) : await this.swhid.swhidCopy('bibtex', input);
-    await this.ctx.reports.show('swh cite.bib', entry);
+    if (origin) {
+      const entry = await this.citeOrigin(origin);
+      await this.ctx.reports.show('swh cite.bib', entry);
+      return;
+    }
+
+    const produced = await this.swhid.produce('bibtex', input);
+    await this.ctx.reports.show('swh cite.bib', produced.text);
+    await produced.report();
   }
 
   /**

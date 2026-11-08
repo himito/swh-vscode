@@ -52,6 +52,16 @@ export async function run() {
     `[a.txt, lines 2-3](https://archive.softwareheritage.org/swh:1:cnt:${hash};lines=2-3)`,
   );
 
+  // a blank archive URL, as the Settings UI stores a cleared field, is the default one
+  const settings = vscode.workspace.getConfiguration('swh');
+  await settings.update('archiveUrl', '  ', vscode.ConfigurationTarget.Global);
+  try {
+    await vscode.commands.executeCommand('swh.swhidCopyLink', { bare: true });
+    assert.equal(await vscode.env.clipboard.readText(), `https://archive.softwareheritage.org/swh:1:cnt:${hash};lines=2-3`);
+  } finally {
+    await settings.update('archiveUrl', undefined, vscode.ConfigurationTarget.Global);
+  }
+
   // the directory, from the explorer's menu
   const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: repo, encoding: 'utf8' }).trim();
   await vscode.commands.executeCommand('swh.swhidCopy', vscode.Uri.file(repo));

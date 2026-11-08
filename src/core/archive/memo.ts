@@ -28,6 +28,13 @@ export type MemoPolicy = {
 export type Generation = number;
 
 /**
+ * Tells whether to forget an answer, as given to {@link Memo.forget}.
+ *
+ * @typeParam T - The type of the answers.
+ */
+export type ForgetWhich<T> = (value: T) => boolean;
+
+/**
  * A remembered answer.
  *
  * @typeParam T - The type of the answer.
@@ -47,8 +54,9 @@ type Entry<T> = {
  * Asking the archive takes time, during which the memo may forget answers,
  * e.g. on a refresh: an answer asked for before then may be out of date. So
  * take the memo's {@link Memo.generation} before asking, and give it back
- * to {@link Memo.put}, which then ignores an answer asked for before the
- * memo forgot.
+ * to {@link Memo.put}, which then ignores the answer if the memo forgot
+ * since what it would have forgotten of it: a refresh that forgets the
+ * negative answers ignores a negative answer in flight, not a positive one.
  *
  * @typeParam T - The type of the answers; never `undefined`, which means
  * "not known".
@@ -58,14 +66,18 @@ type Entry<T> = {
  * const known = new Memo<boolean>({ ttl: MEMO_TTL, keepPositives: true });
  * const asOf = known.generation;
  * const answer = await archive.known([swhid]);
- * known.put(swhid, answer.get(swhid)!, asOf); // ignored if refreshed meanwhile
+ * known.put(swhid, answer.get(swhid)!, asOf); // ignored if forgotten meanwhile
  * ```
  */
 export class Memo<T> {
   /** The answers, by key. */
   private readonly entries = new Map<string, Entry<T>>();
-  /** Bumped each time the memo forgets answers. */
-  private version: Generation = 0;
+  /**
+   * What the memo forgot each time, in order: the generation is their
+   * number, and those since an answer was asked for tell whether to ignore
+   * it. A few closures a session, one for each refresh or save request.
+   */
+  private readonly forgotten: Array<ForgetWhich<T>> = [];
 
   /**
    * Creates an empty memo.
@@ -76,7 +88,7 @@ export class Memo<T> {
 
   /** The state of the memo's answers, to give back to {@link Memo.put}. */
   get generation(): Generation {
-    return this.version;
+    return this.forgotten.length;
   }
 
   /**
@@ -107,11 +119,12 @@ export class Memo<T> {
    * @param key - The key.
    * @param value - The answer.
    * @param asOf - The memo's {@link Memo.generation} when the answer was
-   * asked for; the answer is ignored when the memo has forgotten answers since.
+   * asked for; the answer is ignored when the memo has forgotten answers
+   * since that include it.
    * @returns Whether the answer was remembered.
    */
-  put(key: string, value: T, asOf: Generation = this.version): boolean {
-    if (asOf !== this.version) return false;
+  put(key: string, value: T, asOf: Generation = this.generation): boolean {
+    if (this.forgottenSince(asOf, value)) return false;
     this.entries.set(key, { time: now(), value });
     return true;
   }
@@ -121,19 +134,30 @@ export class Memo<T> {
    *
    * @remarks
    * The {@link Memo.generation} changes even when no answer matches: an
-   * answer asked for before must still be ignored, as it may be out of date.
+   * answer asked for before, that it matches, must still be ignored, as it
+   * may be out of date.
    *
    * @param which - Tells whether to forget an answer.
    */
-  forget(which: (value: T) => boolean): void {
-    this.version++;
+  forget(which: ForgetWhich<T>): void {
+    this.forgotten.push(which);
     for (const [key, entry] of this.entries) if (which(entry.value)) this.entries.delete(key);
   }
 
-  /** Forgets every answer. */
+  /** Forgets every answer, and every answer asked for before. */
   clear(): void {
-    this.version++;
-    this.entries.clear();
+    this.forget(() => true);
+  }
+
+  /**
+   * Tells whether the memo forgot an answer while it was asked for.
+   *
+   * @param asOf - The memo's {@link Memo.generation} when it was asked for.
+   * @param value - The answer.
+   * @returns `true` when what the memo forgot since includes it.
+   */
+  private forgottenSince(asOf: Generation, value: T): boolean {
+    return this.forgotten.slice(asOf).some((which) => which(value));
   }
 
   /**

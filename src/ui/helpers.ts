@@ -35,10 +35,12 @@ export const DEFAULT_ARCHIVE_URL = 'https://archive.softwareheritage.org';
  * The archive's web root, as the `swh.archiveUrl` setting says.
  *
  * @returns The URL, e.g. `https://archive.softwareheritage.org`;
- * {@link DEFAULT_ARCHIVE_URL} when it is not set.
+ * {@link DEFAULT_ARCHIVE_URL} when it is not set, or blank, as the Settings
+ * UI stores a cleared field.
  */
 export function archiveUrl(): string {
-  return config().get<string>(ARCHIVE_URL_SETTING, DEFAULT_ARCHIVE_URL);
+  const setting = config().get<string>(ARCHIVE_URL_SETTING, DEFAULT_ARCHIVE_URL).trim();
+  return setting || DEFAULT_ARCHIVE_URL;
 }
 
 /**

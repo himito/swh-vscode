@@ -56,7 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
     onRateLimit: () => statusBar?.render(),
   });
   const swh = new Swh({
-    git: new Git(() => config().get<string>('gitPath', 'git') || 'git'),
+    git: new Git(() => config().get<string>('gitPath', 'git').trim() || 'git'),
     archive,
   });
 
