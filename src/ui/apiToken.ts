@@ -35,8 +35,8 @@ export class ApiToken implements vscode.Disposable {
    * @param secrets - The extension's secret storage.
    */
   constructor(private readonly secrets: vscode.SecretStorage) {
-    this.listener = secrets.onDidChange((e) => {
-      if (e.key === TOKEN_KEY) this.forget();
+    this.listener = secrets.onDidChange((event) => {
+      if (event.key === TOKEN_KEY) this.forget();
     });
   }
 

@@ -115,8 +115,8 @@ export class SwhOrigins extends SwhKnown {
   protected async directOrigin(root: string): Promise<OriginInfo | null> {
     const remote = await this.remoteUrl(root);
     if (!remote) return null;
-    const e = this.originMemo.get(remote);
-    if (e && fresh(e.time, MEMO_TTL)) return e.value;
+    const entry = this.originMemo.get(remote);
+    if (entry && fresh(entry.time, MEMO_TTL)) return entry.value;
     const epoch = this.memoEpoch;
     const info = await this.findOrigin(originCandidates(remote));
     // forgotten meanwhile: the answer may be from before the change
@@ -205,8 +205,8 @@ export class SwhOrigins extends SwhKnown {
   private forgetBeforeSave(origin: string) {
     this.memoEpoch++;
     const candidates = originCandidates(origin);
-    for (const [remote, e] of this.originMemo) {
-      if (e.value && candidates.includes(e.value.origin)) this.originMemo.delete(remote);
+    for (const [remote, entry] of this.originMemo) {
+      if (entry.value && candidates.includes(entry.value.origin)) this.originMemo.delete(remote);
     }
     // a SWHID tells not which origin holds it: forget every "not archived"
     forgetNegatives(this.knownMemo);

@@ -103,15 +103,15 @@ export async function openUrl(url: string): Promise<void> {
 /**
  * Resolves a path to its true name, following symbolic links.
  *
- * @param p - The path to resolve.
+ * @param fsPath - The path of a file or directory to resolve.
  * @returns The canonical absolute path.
  * @throws {@link core!UserError} when the path does not exist.
  */
-export async function realpath(p: string): Promise<string> {
+export async function realpath(fsPath: string): Promise<string> {
   try {
-    return await fs.realpath(p);
+    return await fs.realpath(fsPath);
   } catch {
-    throw new UserError(`No such file or directory: ${p}`);
+    throw new UserError(`No such file or directory: ${fsPath}`);
   }
 }
 
@@ -129,7 +129,7 @@ export function currentDir(): string {
   const doc = vscode.window.activeTextEditor?.document;
   if (doc?.uri.scheme === 'file' && !doc.isUntitled) return path.dirname(doc.uri.fsPath);
 
-  const folders = vscode.workspace.workspaceFolders?.filter((f) => f.uri.scheme === 'file') ?? [];
+  const folders = vscode.workspace.workspaceFolders?.filter((folder) => folder.uri.scheme === 'file') ?? [];
   if (folders.length) return folders[0].uri.fsPath;
 
   throw new UserError('Open a folder or a file first');

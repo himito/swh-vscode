@@ -28,12 +28,12 @@ function command<A extends unknown[]>(fn: (...args: A) => Promise<unknown>) {
   return async (...args: A) => {
     try {
       await fn(...args);
-    } catch (e) {
-      if (e instanceof Cancelled) return;
-      if (e instanceof UserError) {
-        void vscode.window.showWarningMessage(e.message);
+    } catch (error) {
+      if (error instanceof Cancelled) return;
+      if (error instanceof UserError) {
+        void vscode.window.showWarningMessage(error.message);
       } else {
-        void vscode.window.showErrorMessage(`Software Heritage: ${(e as Error)?.message ?? e}`);
+        void vscode.window.showErrorMessage(`Software Heritage: ${(error as Error)?.message ?? error}`);
       }
     }
   };

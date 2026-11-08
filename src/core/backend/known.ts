@@ -41,8 +41,8 @@ export class SwhKnown {
    * when its window has ended.
    */
   rateLimitText(): Maybe<string> {
-    const r = this.archive.rateLimit();
-    return r && now() < r.reset ? `${r.used}/${r.limit}` : undefined;
+    const rateLimit = this.archive.rateLimit();
+    return rateLimit && now() < rateLimit.reset ? `${rateLimit.used}/${rateLimit.limit}` : undefined;
   }
 
   /**
@@ -67,7 +67,7 @@ export class SwhKnown {
    * @throws {@link UserError} as {@link ArchiveApi.known} does.
    */
   async rememberKnown(swhids: string[]): Promise<void> {
-    const unknown = uniq(swhids).filter((s) => memoGet(this.knownMemo, s) === UNKNOWN);
+    const unknown = uniq(swhids).filter((swhid) => memoGet(this.knownMemo, swhid) === UNKNOWN);
     if (!unknown.length) return;
     const epoch = this.memoEpoch;
     const answers = await this.archive.known(unknown);

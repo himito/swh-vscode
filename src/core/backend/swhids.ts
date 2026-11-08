@@ -83,8 +83,8 @@ export class SwhSwhids extends SwhOrigins {
    * @throws {@link UserError} as {@link Swh.rememberKnown} does.
    */
   private async archivedCommits(commits: string[]): Promise<string[]> {
-    await this.rememberKnown(commits.map((c) => core('rev', c)));
-    return commits.filter((c) => this.knownP(core('rev', c)));
+    await this.rememberKnown(commits.map((commit) => core('rev', commit)));
+    return commits.filter((commit) => this.knownP(core('rev', commit)));
   }
 
   /**
@@ -151,7 +151,7 @@ export class SwhSwhids extends SwhOrigins {
   private async anchor(root: string, rel: string, coreSwhid: string): Promise<Maybe<string>> {
     const hash = hashOf(coreSwhid);
     const commits = await this.anchorCandidates(root, rel, hash);
-    await this.rememberKnown([coreSwhid, ...commits.map((c) => core('rev', c))]);
+    await this.rememberKnown([coreSwhid, ...commits.map((commit) => core('rev', commit))]);
     for (const commit of await this.archivedCommits(commits)) {
       if (hash === (await this.objectAt(root, commit, rel))) return commit;
     }
@@ -226,10 +226,10 @@ export class SwhSwhids extends SwhOrigins {
   private async archivedTarget(root: string, rel: string, dir: boolean) {
     const version = await this.archivedVersion(root, rel, dir);
     if (!version) return undefined;
-    const c = core(dir ? 'dir' : 'cnt', version[1]);
+    const versionSwhid = core(dir ? 'dir' : 'cnt', version[1]);
     // the commit of the archived version holds it, hence its content
-    memoPut(this.knownMemo, c, true);
-    return { core: c, anchor: version[0], version: core('rev', version[0]), archived: true };
+    memoPut(this.knownMemo, versionSwhid, true);
+    return { core: versionSwhid, anchor: version[0], version: core('rev', version[0]), archived: true };
   }
 
   /**
@@ -247,11 +247,11 @@ export class SwhSwhids extends SwhOrigins {
    * @throws {@link UserError} when Git or the archive fails.
    */
   private async worktreeTarget(root: Maybe<string>, rel: Maybe<string>, pub: boolean, worktree: () => Promise<string>) {
-    const c = await worktree();
+    const worktreeSwhid = await worktree();
     return {
-      core: c,
-      anchor: pub && root ? await this.anchor(root, rel!, c) : undefined,
-      archived: pub || !root ? await this.archivedP(c) : false,
+      core: worktreeSwhid,
+      anchor: pub && root ? await this.anchor(root, rel!, worktreeSwhid) : undefined,
+      archived: pub || !root ? await this.archivedP(worktreeSwhid) : false,
       version: undefined as Maybe<string>,
     };
   }
@@ -282,20 +282,27 @@ export class SwhSwhids extends SwhOrigins {
     const origin = info?.origin;
     const pub = isPublicOrigin(origin);
     const dir = (await fs.stat(file)).isDirectory();
-    const t = (archivedVersion && pub && root ? await this.archivedTarget(root, rel!, dir) : undefined) ??
+    const target = (archivedVersion && pub && root ? await this.archivedTarget(root, rel!, dir) : undefined) ??
       (await this.worktreeTarget(root, rel, pub, worktree));
     // the selection's lines hold as long as the archived version is the working tree's
-    const keepLines = !t.version || (lines !== undefined && !dir && t.core === (await worktree()));
+    const keepLines = !target.version || (lines !== undefined && !dir && target.core === (await worktree()));
     const result: SwhidInfo = {
-      swhid: qualify(t.core, origin, info?.snapshot, t.anchor ? core('rev', t.anchor) : undefined, rel, keepLines ? lines : undefined),
-      core: t.core,
-      archived: t.archived,
+      swhid: qualify(
+        target.core,
+        origin,
+        info?.snapshot,
+        target.anchor ? core('rev', target.anchor) : undefined,
+        rel,
+        keepLines ? lines : undefined,
+      ),
+      core: target.core,
+      archived: target.archived,
     };
     if (origin) {
       result.origin = origin;
       result['origin-archived'] = info!.archived;
     }
-    if (t.version) result.version = t.version;
+    if (target.version) result.version = target.version;
     return result;
   }
 
@@ -326,11 +333,12 @@ export class SwhSwhids extends SwhOrigins {
     const worktree = () => (swhid ??= this.worktreeSwhid(file, root));
     try {
       return await this.directSwhid(file, root, lines, archivedVersion, worktree);
-    } catch (e) {
-      if (!(e instanceof UserError)) throw e;
+    } catch (error) {
+      if (!(error instanceof UserError)) throw error;
       // the SWHID from Git alone
-      const c = await worktree();
-      return { swhid: qualify(c, null, null, null, null, lines), core: c, archived: false, unchecked: e.message };
+      const worktreeSwhid = await worktree();
+      const gitSwhid = qualify(worktreeSwhid, null, null, null, null, lines);
+      return { swhid: gitSwhid, core: worktreeSwhid, archived: false, unchecked: error.message };
     }
   }
 
@@ -343,8 +351,8 @@ export class SwhSwhids extends SwhOrigins {
    * @throws {@link UserError} when Git or the archive fails.
    */
   async fileStatus(file: string, coreSwhid?: string): Promise<FileStatus> {
-    const c = coreSwhid ?? (await this.contentSwhid(file, await this.git.root(file)));
-    return { swhid: c, archived: await this.archivedP(c) };
+    const swhid = coreSwhid ?? (await this.contentSwhid(file, await this.git.root(file)));
+    return { swhid: swhid, archived: await this.archivedP(swhid) };
   }
 
   /**

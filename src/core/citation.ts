@@ -58,12 +58,12 @@ export function citation(
   lines?: string,
 ): [string, Why] {
   if (typeof answer === 'object') return [answer.entry, 'archive'];
-  const d = date?.substring(0, 10);
+  const day = date?.substring(0, 10);
   const fields: Array<[string, Maybe<string>]> = [
     ['title', title],
     ['url', url],
-    ['date', d],
-    ['year', d?.substring(0, 4)],
+    ['date', day],
+    ['year', day?.substring(0, 4)],
     ['swhid', swhid],
   ];
   // the types the archive gives
@@ -71,8 +71,8 @@ export function citation(
   // as the archive makes it, e.g. swh-cnt-67c1849-L1-L3
   const key = `swh-${typeOf(coreSwhid)}-${shortHash(coreSwhid)}${lines ? '-L' + lines.replace(/-/g, '-L') : ''}`;
   const body = fields
-    .filter(([, v]) => v)
-    .map(([k, v]) => `    ${k} = {${v}}`)
+    .filter(([, value]) => value)
+    .map(([field, value]) => `    ${field} = {${value}}`)
     .join(',\n');
   return [`@${type}{${key},\n${body}\n}\n`, answer];
 }
@@ -127,9 +127,9 @@ export async function originBibtex(swh: Swh, origin: string): Promise<[string, W
   const info = await swh.originStatus(origin);
   if (!info.archived || !info.snapshot) throw new UserError(`Software Heritage has not archived ${origin}`);
   const url = info.origin;
-  const c = core('snp', info.snapshot);
+  const snapshotSwhid = core('snp', info.snapshot);
   const answer = await swh.archive.citation({ origin: url });
-  return citation(answer, c, `${c};origin=${encodeOrigin(url)}`, originName(url), url, info.date);
+  return citation(answer, snapshotSwhid, `${snapshotSwhid};origin=${encodeOrigin(url)}`, originName(url), url, info.date);
 }
 
 /**

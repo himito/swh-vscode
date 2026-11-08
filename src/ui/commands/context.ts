@@ -76,9 +76,9 @@ function originInputError(input: string): Maybe<string> {
   try {
     parseOrigin(input);
     return undefined;
-  } catch (e) {
-    if (e instanceof UserError) return e.message;
-    throw e;
+  } catch (error) {
+    if (error instanceof UserError) return error.message;
+    throw error;
   }
 }
 
@@ -121,9 +121,9 @@ export class CommandContext {
     let root: string;
     try {
       root = await this.repoRoot();
-    } catch (e) {
-      if (e instanceof UserError) return undefined;
-      throw e;
+    } catch (error) {
+      if (error instanceof UserError) return undefined;
+      throw error;
     }
 
     const origin = await this.swh.originOf(root);

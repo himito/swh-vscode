@@ -42,8 +42,8 @@ export type Resp = {
  * the header is missing or does not start with a number.
  */
 export function headerNumber(headers: Headers, name: string): Maybe<number> {
-  const m = /^ *([0-9]+)/.exec(headers.get(name) ?? '');
-  return m ? Number(m[1]) : undefined;
+  const match = /^ *([0-9]+)/.exec(headers.get(name) ?? '');
+  return match ? Number(match[1]) : undefined;
 }
 
 /**
@@ -82,15 +82,20 @@ export async function retrieve(
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout * 1000);
   try {
-    const r = await fetch(url, { method, body, headers, signal: ctrl.signal });
-    const text = await r.text();
+    const response = await fetch(url, { method, body, headers, signal: ctrl.signal });
+    const text = await response.text();
     let parsed: unknown = NOT_JSON;
     try {
       parsed = JSON.parse(text);
     } catch {
       // not JSON
     }
-    return { status: r.status, body: parsed, retryAfter: headerNumber(r.headers, 'Retry-After'), headers: r.headers };
+    return {
+      status: response.status,
+      body: parsed,
+      retryAfter: headerNumber(response.headers, 'Retry-After'),
+      headers: response.headers,
+    };
   } catch {
     return null;
   } finally {

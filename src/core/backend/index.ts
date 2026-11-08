@@ -82,14 +82,14 @@ export class Swh extends SwhSwhids {
         archived: false,
       });
     }
-    const swhids = new Map(nodes.map((n) => [n.path, n.swhid]));
+    const swhids = new Map(nodes.map((node) => [node.path, node.swhid]));
     // a directory holds a submodule's commit, not the commit itself
-    const covered = (n: TreeNode) =>
-      typeOf(n.swhid) !== 'rev' && ancestors(n.path).some((d) => this.knownP(swhids.get(d)!));
+    const covered = (node: TreeNode) =>
+      typeOf(node.swhid) !== 'rev' && ancestors(node.path).some((dir) => this.knownP(swhids.get(dir)!));
     // directories first: an archived one covers everything under it
-    await this.rememberKnown(nodes.filter((n) => n.dir && !covered(n)).map((n) => n.swhid));
-    await this.rememberKnown(nodes.filter((n) => !n.dir && !covered(n)).map((n) => n.swhid));
-    return nodes.map((n) => ({ ...n, archived: this.knownP(n.swhid) || covered(n) }));
+    await this.rememberKnown(nodes.filter((node) => node.dir && !covered(node)).map((node) => node.swhid));
+    await this.rememberKnown(nodes.filter((node) => !node.dir && !covered(node)).map((node) => node.swhid));
+    return nodes.map((node) => ({ ...node, archived: this.knownP(node.swhid) || covered(node) }));
   }
 
   // ---------------------------------------------------------------- refresh
@@ -131,15 +131,15 @@ export class Swh extends SwhSwhids {
    * Only that commit matters, not HEAD: a later commit elsewhere in the
    * tree does not keep this content from being archived.
    *
-   * @param p - The real path.
+   * @param targetPath - The real path.
    * @returns The reason in words, e.g. `it has uncommitted changes`, or
    * `undefined` when nothing prevents it (it may simply not be archived
    * since the last push) or the path is outside a repository.
    */
-  async unarchivedWhy(p: string): Promise<Maybe<string>> {
-    const root = await this.git.root(p);
+  async unarchivedWhy(targetPath: string): Promise<Maybe<string>> {
+    const root = await this.git.root(targetPath);
     if (!root) return undefined;
-    const rel = relativePath(root, p);
+    const rel = relativePath(root, targetPath);
     const origin = await this.originOf(root);
     if (!origin) return 'the repository has no remote';
     if (!isPublicOrigin(origin)) return `the origin ${origin} is not a public URL`;

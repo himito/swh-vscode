@@ -51,8 +51,8 @@ async function setWithoutContext(value: boolean): Promise<void> {
   const target = inWorkspace ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
   try {
     await config().update(WITHOUT_CONTEXT_SETTING, value, target);
-  } catch (e) {
-    void vscode.window.showErrorMessage(`Software Heritage: ${(e as Error)?.message ?? e}`);
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Software Heritage: ${(error as Error)?.message ?? error}`);
   }
 }
 
@@ -138,18 +138,18 @@ export class MenuView implements vscode.TreeDataProvider<MenuNode>, vscode.Dispo
     this.disposables.push(
       view,
       this.emitter,
-      view.onDidChangeCheckboxState((e) => this.onCheckboxChange(e)),
-      vscode.workspace.onDidChangeConfiguration((e) => this.onConfigurationChange(e)),
+      view.onDidChangeCheckboxState((event) => this.onCheckboxChange(event)),
+      vscode.workspace.onDidChangeConfiguration((event) => this.onConfigurationChange(event)),
     );
   }
 
   /**
    * Writes the *Without context* setting when its checkbox is clicked.
    *
-   * @param e - The checkboxes that changed, and their new states.
+   * @param event - The checkboxes that changed, and their new states.
    */
-  private async onCheckboxChange(e: vscode.TreeCheckboxChangeEvent<MenuNode>): Promise<void> {
-    const toggle = e.items.find(([node]) => !isGroup(node) && node.toggle);
+  private async onCheckboxChange(event: vscode.TreeCheckboxChangeEvent<MenuNode>): Promise<void> {
+    const toggle = event.items.find(([node]) => !isGroup(node) && node.toggle);
     if (toggle) await setWithoutContext(toggle[1] === vscode.TreeItemCheckboxState.Checked);
   }
 
@@ -157,15 +157,15 @@ export class MenuView implements vscode.TreeDataProvider<MenuNode>, vscode.Dispo
    * Redraws the menu when the *Without context* setting changes, wherever
    * it is changed, so that the checkbox always shows it.
    *
-   * @param e - What changed in the settings.
+   * @param event - What changed in the settings.
    */
-  private onConfigurationChange(e: vscode.ConfigurationChangeEvent): void {
-    if (e.affectsConfiguration(`swh.${WITHOUT_CONTEXT_SETTING}`)) this.emitter.fire(undefined);
+  private onConfigurationChange(event: vscode.ConfigurationChangeEvent): void {
+    if (event.affectsConfiguration(`swh.${WITHOUT_CONTEXT_SETTING}`)) this.emitter.fire(undefined);
   }
 
   /** Dispose of the view and its listeners. */
   dispose() {
-    for (const d of this.disposables) d.dispose();
+    for (const disposable of this.disposables) disposable.dispose();
   }
 
   /**

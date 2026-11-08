@@ -143,12 +143,12 @@ const UNRESERVED = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567
 export function hexify(str: string, allowed = ''): string {
   const ok = new Set(UNRESERVED + allowed);
   let out = '';
-  for (const c of str) {
-    if (ok.has(c)) {
-      out += c;
+  for (const char of str) {
+    if (ok.has(char)) {
+      out += char;
     } else {
-      for (const b of Buffer.from(c, 'utf8')) {
-        out += '%' + b.toString(16).toUpperCase().padStart(2, '0');
+      for (const byte of Buffer.from(char, 'utf8')) {
+        out += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
       }
     }
   }
@@ -167,16 +167,16 @@ export function hexify(str: string, allowed = ''): string {
  */
 export function unhex(str: string): string {
   const bytes: number[] = [];
-  for (let i = 0; i < str.length; ) {
-    const m = /^%([0-9a-fA-F]{2})/.exec(str.substring(i, i + 3));
-    if (m) {
-      bytes.push(parseInt(m[1], 16));
-      i += 3;
+  for (let index = 0; index < str.length; ) {
+    const escape = /^%([0-9a-fA-F]{2})/.exec(str.substring(index, index + 3));
+    if (escape) {
+      bytes.push(parseInt(escape[1], 16));
+      index += 3;
     } else {
       // a whole code point: a lone half of a surrogate pair would not encode
-      const c = String.fromCodePoint(str.codePointAt(i)!);
-      bytes.push(...Buffer.from(c, 'utf8'));
-      i += c.length;
+      const char = String.fromCodePoint(str.codePointAt(index)!);
+      bytes.push(...Buffer.from(char, 'utf8'));
+      index += char.length;
     }
   }
   return Buffer.from(bytes).toString('utf8');
@@ -195,7 +195,7 @@ export function unhex(str: string): string {
  * ```
  */
 export function queryString(params: Array<[string, string?]>): string {
-  return params.map(([k, v]) => (v === undefined ? hexify(k) : `${hexify(k)}=${hexify(v)}`)).join('&');
+  return params.map(([key, value]) => (value === undefined ? hexify(key) : `${hexify(key)}=${hexify(value)}`)).join('&');
 }
 
 /**
@@ -219,18 +219,18 @@ export function queryString(params: Array<[string, string?]>): string {
  * ```
  */
 export function normalizeOrigin(url: string): string {
-  const strip = (u: string) => u.replace(/\/+$/, '').replace(/\.git$/i, '');
-  let m = /^(https?|ssh|git|git\+ssh|ssh\+git):\/\/(?:[^@/]+@)?([^/:@]+)(:[0-9]+)?(\/.*)$/i.exec(url);
-  if (m) {
+  const strip = (candidate: string) => candidate.replace(/\/+$/, '').replace(/\.git$/i, '');
+  let match = /^(https?|ssh|git|git\+ssh|ssh\+git):\/\/(?:[^@/]+@)?([^/:@]+)(:[0-9]+)?(\/.*)$/i.exec(url);
+  if (match) {
     // ssh:// and git:// become https; their port is not the web one
-    const scheme = m[1].toLowerCase();
+    const scheme = match[1].toLowerCase();
     const convert = scheme !== 'http' && scheme !== 'https';
-    return strip(`${convert ? 'https' : scheme}://${m[2].toLowerCase()}${convert ? '' : m[3] ?? ''}${m[4]}`);
+    return strip(`${convert ? 'https' : scheme}://${match[2].toLowerCase()}${convert ? '' : match[3] ?? ''}${match[4]}`);
   }
   if (!/^[a-z]:[/\\]/i.test(url)) {
-    m = /^(?:[^@/:]+@)?([^@/:]+):([^:]+)$/.exec(url);
-    if (m && !m[2].startsWith('//')) {
-      return strip(`https://${m[1].toLowerCase()}/${m[2].replace(/^\/+/, '')}`);
+    match = /^(?:[^@/:]+@)?([^@/:]+):([^:]+)$/.exec(url);
+    if (match && !match[2].startsWith('//')) {
+      return strip(`https://${match[1].toLowerCase()}/${match[2].replace(/^\/+/, '')}`);
     }
   }
   return url;
@@ -299,8 +299,8 @@ export function parseOrigin(input: string): string {
  * ```
  */
 export function originCandidates(url: string): string[] {
-  const n = normalizeOrigin(url);
-  return isPublicOrigin(n) ? [n, n + '.git'] : [n];
+  const normalized = normalizeOrigin(url);
+  return isPublicOrigin(normalized) ? [normalized, normalized + '.git'] : [normalized];
 }
 
 /**
@@ -337,7 +337,7 @@ export const pathOrigin = (origin: string) => hexify(origin, "/:@!$&'()*+,;=");
  * ```
  */
 export function encodeOrigin(origin: string): string {
-  return origin.replace(/[%;\p{Zs}\p{Zl}\p{Zp}\p{Cc}]/gu, (c) => hexify(c));
+  return origin.replace(/[%;\p{Zs}\p{Zl}\p{Zp}\p{Cc}]/gu, (char) => hexify(char));
 }
 
 /**
@@ -397,13 +397,13 @@ export function qualify(
   lines?: string | null,
 ): string {
   const pub = isPublicOrigin(origin);
-  let s = coreSwhid;
-  if (pub) s += ';origin=' + encodeOrigin(origin);
-  if (pub && snapshot) s += ';visit=' + core('snp', snapshot);
-  if (anchor) s += ';anchor=' + anchor;
-  if (anchor && rel) s += ';path=/' + (rel === '.' ? '' : encodePath(rel));
-  if (lines) s += ';lines=' + lines;
-  return s;
+  let qualified = coreSwhid;
+  if (pub) qualified += ';origin=' + encodeOrigin(origin);
+  if (pub && snapshot) qualified += ';visit=' + core('snp', snapshot);
+  if (anchor) qualified += ';anchor=' + anchor;
+  if (anchor && rel) qualified += ';path=/' + (rel === '.' ? '' : encodePath(rel));
+  if (lines) qualified += ';lines=' + lines;
+  return qualified;
 }
 
 /**
@@ -421,9 +421,9 @@ export function qualify(
  */
 export function qualifiers(swhid: string): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const q of swhid.split(';').slice(1)) {
-    const pos = q.indexOf('=') < 0 ? q.length : q.indexOf('=');
-    out[q.substring(0, pos)] = unhex(q.substring(Math.min(pos + 1, q.length)));
+  for (const qualifier of swhid.split(';').slice(1)) {
+    const pos = qualifier.indexOf('=') < 0 ? qualifier.length : qualifier.indexOf('=');
+    out[qualifier.substring(0, pos)] = unhex(qualifier.substring(Math.min(pos + 1, qualifier.length)));
   }
   return out;
 }
@@ -459,10 +459,12 @@ export function ancestors(path: string): string[] {
  * when it does not parse.
  */
 export function formatDate(date: string): string {
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return date;
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  const parsed = new Date(date);
+  if (isNaN(parsed.getTime())) return date;
+  const twoDigits = (part: number) => String(part).padStart(2, '0');
+  const day = `${parsed.getFullYear()}-${twoDigits(parsed.getMonth() + 1)}-${twoDigits(parsed.getDate())}`;
+  const time = `${twoDigits(parsed.getHours())}:${twoDigits(parsed.getMinutes())}`;
+  return `${day} ${time}`;
 }
 
 /**
@@ -498,8 +500,8 @@ export function originName(origin: string): string {
 export function findSwhids(text: string): Array<[number, string]> {
   const re = /swh:1:(?:cnt|dir|rev|rel|snp):[0-9a-f]{40}(?:;[^\s"'`<>()[\]{}]*)?/g;
   const out: Array<[number, string]> = [];
-  for (const m of text.matchAll(re)) {
-    out.push([m.index!, m[0].replace(/[.,:;]+$/, '')]);
+  for (const match of text.matchAll(re)) {
+    out.push([match.index!, match[0].replace(/[.,:;]+$/, '')]);
   }
   return out;
 }

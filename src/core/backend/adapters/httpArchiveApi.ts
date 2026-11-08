@@ -161,11 +161,11 @@ export class HttpArchiveApi implements ArchiveApi {
   /**
    * The URL of a path of the archive's Web API.
    *
-   * @param p - The path, starting with `/`, e.g. `/known/`.
+   * @param apiPath - The path, starting with `/`, e.g. `/known/`.
    * @returns The full URL, e.g. `https://archive.softwareheritage.org/api/1/known/`.
    */
-  private apiUrl(p: string): string {
-    return baseUrl(this.deps.archiveUrl()) + '/api/1' + p;
+  private apiUrl(apiPath: string): string {
+    return baseUrl(this.deps.archiveUrl()) + '/api/1' + apiPath;
   }
 
   /**
@@ -179,10 +179,10 @@ export class HttpArchiveApi implements ArchiveApi {
    */
   private async headers(body?: string): Promise<Record<string, string>> {
     const token = await this.deps.token();
-    const h: Record<string, string> = { Accept: 'application/json' };
-    if (body) h['Content-Type'] = 'application/json';
-    if (token) h.Authorization = `Bearer ${token}`;
-    return h;
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (body) headers['Content-Type'] = 'application/json';
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return headers;
   }
 
   /**
@@ -193,15 +193,15 @@ export class HttpArchiveApi implements ArchiveApi {
    * is then read from the answer's headers.
    *
    * @param method - The HTTP method.
-   * @param p - The API path, e.g. `/known/`.
+   * @param apiPath - The API path, e.g. `/known/`.
    * @param body - The JSON body, if any.
    * @returns The response, whatever its status but 429.
    * @throws {@link UserError} when the archive cannot be reached, or when the
    * rate limit is reached.
    */
-  private async request(method: string, p: string, body?: string): Promise<Resp> {
+  private async request(method: string, apiPath: string, body?: string): Promise<Resp> {
     const headers = await this.headers(body);
-    const resp = await retrieve(method, this.apiUrl(p), body, headers, TIMEOUT);
+    const resp = await retrieve(method, this.apiUrl(apiPath), body, headers, TIMEOUT);
     if (!resp) throw new UserError(`Cannot reach the Software Heritage archive at ${this.deps.archiveUrl()}`);
     if (headers.Authorization) this.forgetRateLimit();
     else this.trackRateLimit(resp);

@@ -65,9 +65,9 @@ export class Git {
         resolve({ status: -1, out: '' });
         return;
       }
-      child.stdout.setEncoding('utf8').on('data', (d: string) => (out += d));
-      child.stderr.setEncoding('utf8').on('data', (d: string) => {
-        if (opts.stderr) out += d;
+      child.stdout.setEncoding('utf8').on('data', (chunk: string) => (out += chunk));
+      child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+        if (opts.stderr) out += chunk;
       });
       // only the final newlines: a path may end with a space
       const output = () => out.replace(/[\r\n]+$/, '');
@@ -86,8 +86,8 @@ export class Git {
    * prints nothing.
    */
   async get(dir: string, args: string[], env?: NodeJS.ProcessEnv): Promise<Maybe<string>> {
-    const r = await this.run(dir, args, { env });
-    return r.status === 0 && r.out !== '' ? r.out : undefined;
+    const result = await this.run(dir, args, { env });
+    return result.status === 0 && result.out !== '' ? result.out : undefined;
   }
 
   /**
@@ -104,11 +104,11 @@ export class Git {
    * @throws {@link UserError} when the command fails, with Git's message.
    */
   async check(dir: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
-    const r = await this.run(dir, args, { stderr: true, env });
-    if (r.status !== 0) {
-      throw new UserError(`Git ${args[0]} failed in ${dir}: ${r.out}`);
+    const result = await this.run(dir, args, { stderr: true, env });
+    if (result.status !== 0) {
+      throw new UserError(`Git ${args[0]} failed in ${dir}: ${result.out}`);
     }
-    return r.out;
+    return result.out;
   }
 
   /**

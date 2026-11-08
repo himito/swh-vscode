@@ -62,11 +62,11 @@ export type Scan = {
 /**
  * Gives a proportion in percent, rounded down.
  *
- * @param k - The part.
- * @param n - The whole.
- * @returns `k` out of `n`, in percent; 0 when `n` is 0.
+ * @param part - How many, out of `total`.
+ * @param total - How many in all.
+ * @returns `part` out of `total`, in percent; 0 when `total` is 0.
  */
-export const percent = (k: number, n: number) => (n === 0 ? 0 : Math.floor((100 * k) / n));
+export const percent = (part: number, total: number) => (total === 0 ? 0 : Math.floor((100 * part) / total));
 
 /**
  * Compares two relative paths component by component, for sorting.
@@ -75,21 +75,21 @@ export const percent = (k: number, n: number) => (n === 0 ? 0 : Math.floor((100 
  * Comparing whole strings would put `a-b` between `a` and `a/c`; comparing
  * components keeps every directory's content right after it.
  *
- * @param a - A relative path, `"."` for the root.
- * @param b - Another one.
- * @returns A negative number when `a` comes first, positive when `b` does,
+ * @param left - A relative path, `"."` for the root.
+ * @param right - Another relative path.
+ * @returns A negative number when `left` comes first, positive when `right` does,
  * 0 when they are equal; the root `"."` comes first.
  */
-function comparePaths(a: string, b: string): number {
-  if (a === b) return 0;
-  if (a === '.') return -1;
-  if (b === '.') return 1;
-  const x = a.split('/');
-  const y = b.split('/');
-  for (let i = 0; i < Math.min(x.length, y.length); i++) {
-    if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+function comparePaths(left: string, right: string): number {
+  if (left === right) return 0;
+  if (left === '.') return -1;
+  if (right === '.') return 1;
+  const leftParts = left.split('/');
+  const rightParts = right.split('/');
+  for (let index = 0; index < Math.min(leftParts.length, rightParts.length); index++) {
+    if (leftParts[index] !== rightParts[index]) return leftParts[index] < rightParts[index] ? -1 : 1;
   }
-  return x.length - y.length;
+  return leftParts.length - rightParts.length;
 }
 
 /**
@@ -104,38 +104,38 @@ function comparePaths(a: string, b: string): number {
  * @returns The scan, whose root is `"."`.
  */
 export function buildScan(nodes: TreeNode[]): Scan {
-  const sorted = [...nodes].sort((a, b) => comparePaths(a.path, b.path));
+  const sorted = [...nodes].sort((left, right) => comparePaths(left.path, right.path));
   // directory path -> [files, archived] of the files under it
   const counts = new Map<string, [number, number]>();
-  for (const n of sorted) {
-    if (n.dir) continue;
-    for (const d of ancestors(n.path)) {
-      const c = counts.get(d) ?? [0, 0];
-      counts.set(d, [c[0] + 1, c[1] + (n.archived ? 1 : 0)]);
+  for (const node of sorted) {
+    if (node.dir) continue;
+    for (const dir of ancestors(node.path)) {
+      const dirCounts = counts.get(dir) ?? [0, 0];
+      counts.set(dir, [dirCounts[0] + 1, dirCounts[1] + (node.archived ? 1 : 0)]);
     }
   }
   const byPath = new Map<string, ScanItem>();
   const items: ScanItem[] = [];
-  for (const n of sorted) {
-    const c = counts.get(n.path) ?? [0, 0];
-    const status: ScanStatus = n.archived ? 'archived' : n.dir && c[1] > 0 ? 'partial' : 'not-archived';
+  for (const node of sorted) {
+    const nodeCounts = counts.get(node.path) ?? [0, 0];
+    const status: ScanStatus = node.archived ? 'archived' : node.dir && nodeCounts[1] > 0 ? 'partial' : 'not-archived';
     const item: ScanItem = {
-      path: n.path,
-      name: n.path === '.' ? './' : n.path.split('/').pop()! + (n.dir ? '/' : ''),
-      swhid: n.swhid,
-      dir: n.dir,
+      path: node.path,
+      name: node.path === '.' ? './' : node.path.split('/').pop()! + (node.dir ? '/' : ''),
+      swhid: node.swhid,
+      dir: node.dir,
       status,
-      counts: n.dir ? c : undefined,
+      counts: node.dir ? nodeCounts : undefined,
       children: [],
     };
-    const anc = ancestors(n.path);
+    const anc = ancestors(node.path);
     item.parent = anc.length ? byPath.get(anc[anc.length - 1]) : undefined;
     item.parent?.children.push(item);
-    byPath.set(n.path, item);
+    byPath.set(node.path, item);
     items.push(item);
   }
   const root = byPath.get('.') ?? { path: '.', name: './', swhid: '', dir: true, status: 'not-archived', children: [] };
-  const dirs = items.filter((i) => i.dir);
+  const dirs = items.filter((item) => item.dir);
   const all = counts.get('.') ?? [0, 0];
   return {
     root,
@@ -143,21 +143,21 @@ export function buildScan(nodes: TreeNode[]): Scan {
     files: all[0],
     archivedFiles: all[1],
     dirs: dirs.length,
-    archivedDirs: dirs.filter((d) => d.status === 'archived').length,
-    partialDirs: dirs.filter((d) => d.status === 'partial').length,
+    archivedDirs: dirs.filter((dir) => dir.status === 'archived').length,
+    partialDirs: dirs.filter((dir) => dir.status === 'partial').length,
   };
 }
 
 /**
  * Describes the figures of a scan in words, for the Scan view's header.
  *
- * @param s - The scan.
+ * @param scan - The scan to summarize.
  * @returns E.g. `"Files: 3, archived 1 (33%)   Directories: 3, archived 1 (33%), partially 1 (33%)"`.
  */
-export function scanSummary(s: Scan): string {
+export function scanSummary(scan: Scan): string {
   return (
-    `Files: ${s.files}, archived ${s.archivedFiles} (${percent(s.archivedFiles, s.files)}%)   ` +
-    `Directories: ${s.dirs}, archived ${s.archivedDirs} (${percent(s.archivedDirs, s.dirs)}%), ` +
-    `partially ${s.partialDirs} (${percent(s.partialDirs, s.dirs)}%)`
+    `Files: ${scan.files}, archived ${scan.archivedFiles} (${percent(scan.archivedFiles, scan.files)}%)   ` +
+    `Directories: ${scan.dirs}, archived ${scan.archivedDirs} (${percent(scan.archivedDirs, scan.dirs)}%), ` +
+    `partially ${scan.partialDirs} (${percent(scan.partialDirs, scan.dirs)}%)`
   );
 }

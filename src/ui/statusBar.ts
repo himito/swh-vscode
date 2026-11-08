@@ -120,24 +120,24 @@ export class StatusBar implements vscode.Disposable {
       vscode.workspace.onDidSaveTextDocument((doc) => {
         if (doc === vscode.window.activeTextEditor?.document) void this.update(true);
       }),
-      vscode.workspace.onDidChangeTextDocument((e) => {
+      vscode.workspace.onDidChangeTextDocument((event) => {
         // modified, or back to its saved state by undo: only the tooltip changes
-        if (e.document === vscode.window.activeTextEditor?.document) this.render();
+        if (event.document === vscode.window.activeTextEditor?.document) this.render();
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.update()),
-      vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration(`swh.${ARCHIVE_URL_SETTING}`)) {
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration(`swh.${ARCHIVE_URL_SETTING}`)) {
           // another archive: none of the previous answers hold
           this.swh.forgetAll();
           this.forget();
-        } else if (e.affectsConfiguration('swh')) void this.update();
+        } else if (event.affectsConfiguration('swh')) void this.update();
       }),
     );
   }
 
   /** Remove the item and stop listening to events. */
   dispose() {
-    for (const d of this.disposables) d.dispose();
+    for (const disposable of this.disposables) disposable.dispose();
   }
 
   /**
@@ -166,15 +166,15 @@ export class StatusBar implements vscode.Disposable {
    */
   private async modePath(): Promise<Maybe<ShownCandidate>> {
     const editor = fileEditor();
-    let p: string;
+    let targetPath: string;
     let dir = false;
     let dirty = false;
     try {
       if (editor) {
-        p = await fs.realpath(editor.document.uri.fsPath);
+        targetPath = await fs.realpath(editor.document.uri.fsPath);
         dirty = editor.document.isDirty;
       } else if (!vscode.window.activeTextEditor) {
-        p = await realCurrentDir();
+        targetPath = await realCurrentDir();
         dir = true;
       } else {
         return undefined;
@@ -182,9 +182,9 @@ export class StatusBar implements vscode.Disposable {
     } catch {
       return undefined;
     }
-    if (/[/\\]\.git([/\\]|$)/.test(p)) return undefined;
-    if (!(await this.swh.git.root(p))) return undefined;
-    return { path: p, dir, dirty };
+    if (/[/\\]\.git([/\\]|$)/.test(targetPath)) return undefined;
+    if (!(await this.swh.git.root(targetPath))) return undefined;
+    return { path: targetPath, dir, dirty };
   }
 
   /**
@@ -227,33 +227,34 @@ export class StatusBar implements vscode.Disposable {
   }
 
   /**
-   * Ask for the archival status of the file or directory at `p`, and record it.
+   * Ask for the archival status of the file or directory at `targetPath`, and record it.
    *
    * @remarks
    * Failures are recorded as the `error` status, with their message in the
    * tooltip. Reaching the API's rate limit is also shown as a warning, since
    * it is the one failure the user can act on.
    *
-   * @param p - The real path to check.
-   * @param dir - Whether `p` is a directory.
+   * @param targetPath - The real path to check.
+   * @param dir - Whether `targetPath` is a directory.
    * @param stamp - The path's stamp at the time of the check, see `stampOf`.
    */
-  private async check(p: string, dir: boolean, stamp: string) {
+  private async check(targetPath: string, dir: boolean, stamp: string) {
     const check = ++this.checks;
     const set = (status: Status, swhid?: string, error?: string) => {
-      const old = this.entries.get(p);
+      const old = this.entries.get(targetPath);
       if (old && old.check > check) return;
-      this.entries.set(p, { stamp, status, swhid: swhid ?? (status === 'pending' ? undefined : old?.swhid), error, check });
-      if (this.current?.path === p) this.render();
+      const knownSwhid = swhid ?? (status === 'pending' ? undefined : old?.swhid);
+      this.entries.set(targetPath, { stamp, status, swhid: knownSwhid, error, check });
+      if (this.current?.path === targetPath) this.render();
     };
     set('pending');
     try {
-      const root = await this.swh.git.root(p);
+      const root = await this.swh.git.root(targetPath);
       if (!root) return;
-      if (dir) await this.dirStatus(p, root, set);
-      else await this.fileStatus(p, root, set);
-    } catch (e) {
-      const why = (e as Error)?.message ?? String(e);
+      if (dir) await this.dirStatus(targetPath, root, set);
+      else await this.fileStatus(targetPath, root, set);
+    } catch (error) {
+      const why = (error as Error)?.message ?? String(error);
       // the one failure the user can act on
       if (why.startsWith(RATE_LIMIT_MESSAGE)) void vscode.window.showWarningMessage(why);
       set('error', undefined, why);
@@ -273,15 +274,15 @@ export class StatusBar implements vscode.Disposable {
    * @param root - The root of the file's Git repository.
    * @param set - Records a status, and the SWHID when known.
    */
-  private async fileStatus(file: string, root: string, set: (s: Status, swhid?: string) => void) {
+  private async fileStatus(file: string, root: string, set: (status: Status, swhid?: string) => void) {
     if (!isPublicOrigin(await this.swh.originOf(root))) {
       // as qualifiedSwhid has it: the archive is not asked
       set('not-archived', await this.swh.contentSwhid(file, root).catch(() => undefined));
       return;
     }
-    const r = await this.swh.fileStatus(file, await this.swh.contentSwhid(file, root));
-    set(r.archived ? 'archived' : 'not-archived', r.swhid);
-    if (!r.archived) {
+    const result = await this.swh.fileStatus(file, await this.swh.contentSwhid(file, root));
+    set(result.archived ? 'archived' : 'not-archived', result.swhid);
+    if (!result.archived) {
       const info = await this.swh.originQuiet(root).catch(() => null);
       if (info?.archived) set('origin-archived');
     }
@@ -300,12 +301,12 @@ export class StatusBar implements vscode.Disposable {
    * @param root - The root of the directory's Git repository.
    * @param set - Records a status, and the SWHID when known.
    */
-  private async dirStatus(dir: string, root: string, set: (s: Status, swhid?: string) => void) {
+  private async dirStatus(dir: string, root: string, set: (status: Status, swhid?: string) => void) {
     const info = await this.swh.originQuiet(root);
     const tree = info?.archived && !(await this.swh.untracked(dir)) ? await this.swh.headTree(dir, root) : undefined;
     if (tree) {
-      const r = await this.swh.fileStatus(dir, core('dir', tree));
-      set(r.archived ? 'archived' : 'origin-archived', r.swhid);
+      const result = await this.swh.fileStatus(dir, core('dir', tree));
+      set(result.archived ? 'archived' : 'origin-archived', result.swhid);
     } else {
       set(info?.archived ? 'origin-archived' : 'not-archived');
     }
@@ -341,15 +342,15 @@ export class StatusBar implements vscode.Disposable {
 }
 
 /**
- * A stamp that changes when the file or directory at `p` changes.
+ * A stamp that changes when the file or directory at `targetPath` changes.
  *
- * @param p - The path to stamp.
- * @returns `p` and its modification time; `p` alone when it cannot be read.
+ * @param targetPath - The path to stamp.
+ * @returns `targetPath` and its modification time; `targetPath` alone when it cannot be read.
  */
-async function stampOf(p: string): Promise<string> {
+async function stampOf(targetPath: string): Promise<string> {
   try {
-    return `${p}@${(await fs.stat(p)).mtimeMs}`;
+    return `${targetPath}@${(await fs.stat(targetPath)).mtimeMs}`;
   } catch {
-    return p;
+    return targetPath;
   }
 }

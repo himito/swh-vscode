@@ -59,7 +59,7 @@ export const uniq = <T>(xs: T[]) => [...new Set(xs)];
  * Split an array into consecutive batches.
  *
  * @param xs - The array.
- * @param n - The size of each batch; the last one may be shorter.
+ * @param size - The size of each batch; the last one may be shorter.
  * @returns The batches, in order.
  *
  * @example
@@ -67,9 +67,9 @@ export const uniq = <T>(xs: T[]) => [...new Set(xs)];
  * partition([1, 2, 3, 4, 5], 2); // [[1, 2], [3, 4], [5]]
  * ```
  */
-export function partition<T>(xs: T[], n: number): T[][] {
+export function partition<T>(xs: T[], size: number): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
+  for (let start = 0; start < xs.length; start += size) out.push(xs.slice(start, start + size));
   return out;
 }
 
@@ -89,10 +89,10 @@ export function partition<T>(xs: T[], n: number): T[][] {
  */
 export function memoGet<T>(memo: Memo<T>, key: string): T | null | typeof UNKNOWN {
   // a SWHID is immutable, but the archive may get the artifact later
-  const e = memo.get(key);
-  if (!e) return UNKNOWN;
-  if (e.value) return e.value;
-  return fresh(e.time, MEMO_TTL) ? null : UNKNOWN;
+  const entry = memo.get(key);
+  if (!entry) return UNKNOWN;
+  if (entry.value) return entry.value;
+  return fresh(entry.time, MEMO_TTL) ? null : UNKNOWN;
 }
 
 /**
@@ -115,5 +115,5 @@ export function memoPut<T>(memo: Memo<T>, key: string, value: T): T {
  * @param memo - The memo.
  */
 export function forgetNegatives<T>(memo: Memo<T>) {
-  for (const [k, e] of memo) if (!e.value) memo.delete(k);
+  for (const [key, entry] of memo) if (!entry.value) memo.delete(key);
 }
