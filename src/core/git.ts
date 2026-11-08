@@ -10,16 +10,30 @@
  * @packageDocumentation
  */
 
-import { spawn } from 'child_process';
-import { promises as fs } from 'fs';
+import { type ChildProcess, spawn } from 'child_process';
+import { promises as fs, type Stats } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { UserError } from './errors';
 import type { Maybe } from './types';
 
+/** The exit status of a Git command that could not be run at all, e.g. Git is not installed. */
+export const GIT_NOT_RUN = -1;
+
+/**
+ * The output of a Git command, without its final newlines.
+ *
+ * @remarks
+ * Only the newlines: a path Git prints may end with a space.
+ *
+ * @param out - The output.
+ * @returns `out` without its trailing `\n` and `\r`.
+ */
+const withoutFinalNewlines = (out: string) => out.replace(/[\r\n]+$/, '');
+
 /** The result of a Git command. */
 export type GitResult = {
-  /** The exit status: 0 on success, -1 when Git could not be run at all. */
+  /** The exit status: 0 on success, {@link GIT_NOT_RUN} when Git could not be run at all. */
   status: number;
   /** The standard output (and error, if asked for), without its final newlines. */
   out: string;
@@ -48,31 +62,40 @@ export class Git {
    * Runs a Git command.
    *
    * @remarks
-   * Never throws: when Git cannot be run, the status is -1.
+   * Never throws: when Git cannot be run, the status is {@link GIT_NOT_RUN}.
+   * Git gets no standard input, so a command that would read it, e.g. to
+   * prompt, ends instead of waiting. Its standard error is read only when
+   * `opts.stderr` asks for it, and dropped otherwise.
    *
    * @param dir - The directory to run it in.
    * @param args - The command's arguments, e.g. `['rev-parse', 'HEAD']`.
    * @param opts - Whether to capture the standard error, and the environment.
-   * @returns Its exit status and its output, trimmed.
+   * @returns Its exit status and its output, without its final newlines.
    */
   run(dir: string, args: string[], opts: GitOptions = {}): Promise<GitResult> {
     return new Promise((resolve) => {
-      let out = '';
-      let child;
+      const chunks: string[] = [];
+      // a promise settles once: a `close` after an `error` changes nothing
+      const finish = (status: number) => resolve({ status, out: withoutFinalNewlines(chunks.join('')) });
+
+      let child: ChildProcess;
       try {
-        child = spawn(this.program(), args, { cwd: dir, env: opts.env ?? process.env, windowsHide: true });
+        child = spawn(this.program(), args, {
+          cwd: dir,
+          env: opts.env ?? process.env,
+          stdio: ['ignore', 'pipe', opts.stderr ? 'pipe' : 'ignore'],
+          windowsHide: true,
+        });
       } catch {
-        resolve({ status: -1, out: '' });
+        finish(GIT_NOT_RUN);
         return;
       }
-      child.stdout.setEncoding('utf8').on('data', (chunk: string) => (out += chunk));
-      child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
-        if (opts.stderr) out += chunk;
-      });
-      // only the final newlines: a path may end with a space
-      const output = () => out.replace(/[\r\n]+$/, '');
-      child.on('error', () => resolve({ status: -1, out: output() }));
-      child.on('close', (code) => resolve({ status: code ?? -1, out: output() }));
+
+      const collect = (chunk: string) => chunks.push(chunk);
+      child.stdout?.setEncoding('utf8').on('data', collect);
+      child.stderr?.setEncoding('utf8').on('data', collect);
+      child.on('error', () => finish(GIT_NOT_RUN));
+      child.on('close', (code) => finish(code ?? GIT_NOT_RUN));
     });
   }
 
@@ -143,26 +166,92 @@ export class Git {
    * @param root - The repository's root.
    * @param fn - Runs the Git commands, with the environment to pass to them.
    * @returns What `fn` gives.
-   * @throws {@link UserError} when Git cannot tell where the index is.
+   * @throws {@link UserError} when Git cannot tell where the index is; the
+   * file system's error when the index exists but cannot be read or copied.
    */
   async withIndexCopy<T>(root: string, fn: (env: NodeJS.ProcessEnv) => Promise<T>): Promise<T> {
-    const index = path.resolve(root, await this.check(root, ['rev-parse', '--git-path', 'index']));
-    const tmpdir = await fs.mkdtemp(path.join(os.tmpdir(), 'swh-index-'));
-    const tmp = path.join(tmpdir, 'index');
-    try {
-      // git rejects an empty index file: none at all is an empty index;
-      // the copy keeps the index's date, against which git tells whether
-      // a file's recorded stat can be trusted
-      const st = await fs.stat(index).catch(() => undefined);
-      // no index: an empty one; a failed copy must not pass for one
-      if (st) {
-        await fs.copyFile(index, tmp);
-        await fs.utimes(tmp, st.atime, st.mtime);
-      }
-      return await fn({ ...process.env, GIT_INDEX_FILE: tmp });
-    } finally {
-      await fs.rm(tmpdir, { recursive: true, force: true }).catch(() => undefined);
-    }
+    const index = await this.indexPath(root);
+    return withTempDir(INDEX_COPY_PREFIX, async (dir) => {
+      const copy = path.join(dir, 'index');
+      await copyIndex(index, copy);
+      return fn({ ...process.env, GIT_INDEX_FILE: copy });
+    });
+  }
+
+  /**
+   * The path of a repository's index.
+   *
+   * @remarks
+   * Git gives it relative to the root, or absolute, e.g. in a linked
+   * worktree or when `GIT_INDEX_FILE` is set.
+   *
+   * @param root - The repository's root.
+   * @returns The index's absolute path; the file may not exist yet.
+   * @throws {@link UserError} when Git cannot tell where the index is.
+   */
+  private async indexPath(root: string): Promise<string> {
+    return path.resolve(root, await this.check(root, ['rev-parse', '--git-path', 'index']));
+  }
+}
+
+/** The prefix of the temporary directories that hold the copies of an index. */
+const INDEX_COPY_PREFIX = 'swh-index-';
+
+/**
+ * Runs `fn` with a new temporary directory, deleted afterwards.
+ *
+ * @remarks
+ * The directory is deleted whether `fn` succeeds or not; a failure to
+ * delete it is ignored, as it is the system's temporary directory.
+ *
+ * @typeParam T - What `fn` gives.
+ * @param prefix - The start of the directory's name.
+ * @param fn - What to run, with the directory's path.
+ * @returns What `fn` gives.
+ */
+async function withTempDir<T>(prefix: string, fn: (dir: string) => Promise<T>): Promise<T> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  try {
+    return await fn(dir);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/**
+ * Copies a repository's index, keeping its modification time.
+ *
+ * @remarks
+ * Git tells from the index's date whether the file stats it records can be
+ * trusted, so the copy keeps it. A repository may have no index yet, e.g.
+ * before its first `git add`: then no copy is made, which Git reads as an
+ * empty index. An empty file would not do: Git rejects it.
+ *
+ * @param index - The index's path.
+ * @param copy - Where to copy it.
+ * @throws The file system's error when the index exists but cannot be read
+ * or copied: an empty index must not pass for it.
+ */
+async function copyIndex(index: string, copy: string): Promise<void> {
+  const stats = await statIfExists(index);
+  if (!stats) return;
+  await fs.copyFile(index, copy);
+  await fs.utimes(copy, stats.atime, stats.mtime);
+}
+
+/**
+ * The stats of a file, if it exists.
+ *
+ * @param file - The file's path.
+ * @returns Its stats, or `undefined` when there is no such file.
+ * @throws The file system's error for any other failure, e.g. a permission denied.
+ */
+async function statIfExists(file: string): Promise<Maybe<Stats>> {
+  try {
+    return await fs.stat(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
   }
 }
 
