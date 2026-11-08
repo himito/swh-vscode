@@ -23,8 +23,7 @@ Install it from the [Visual Studio Marketplace](https://marketplace.visualstudio
 - [Token or no token](#token-or-no-token)
 - [Settings](#settings)
 - [Requirements](#requirements)
-- [Development](#development)
-  - [Project structure](#project-structure)
+- [Contributing](#contributing)
 - [License](#license)
 
 ## The side bar
@@ -114,117 +113,9 @@ Either set the `SWH_API_TOKEN` environment variable, or run **Software Heritage:
 
 You need VS Code 1.90 or later and `git`. Only local files are supported: remote and virtual workspaces are not. SWHIDs are SHA-1-based, so repositories that use SHA-256 are not supported either.
 
-## Development
+## Contributing
 
-```shell
-npm install
-npm test        # unit tests, and the client on a temporary Git repository
-npm run smoke   # runs the commands in a real VS Code
-npm run docs    # the API documentation, as HTML in docs/
-npm run changelog  # what the commits since the last release would add to CHANGELOG.md
-```
-
-To try the extension, press F5 in VS Code. To package it, run `npx @vscode/vsce package`.
-
-### Changelog
-
-[CHANGELOG.md](CHANGELOG.md) follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). It is written for users, so it is curated by hand, with [git-cliff](https://git-cliff.org) drafting each release from the commits (see [cliff.toml](cliff.toml)):
-
-- Commit subjects follow [Conventional Commits](https://www.conventionalcommits.org): `feat` gives an *Added* entry, `perf` *Changed*, `revert` *Removed*, `fix` *Fixed* and `fix(security)` *Security*. A breaking change (`feat!:`, or a `BREAKING CHANGE:` footer) is marked **BREAKING**. `refactor`, `docs`, `ci`, `build`, `chore`, `test` and `style` change nothing users see and give no entry.
-- `npm run changelog` shows what the commits since the last release would add, without writing anything.
-- When releasing, after setting the new version in `package.json`, run `npm run changelog:release`. It drafts the release at the top of the file, right below its header: its heading and date, then the entries from the commits. Curate it (reword the entries for users, add what the commits do not say), and commit it before tagging `vX.Y.Z`.
-- The header of [cliff.toml](cliff.toml) must be exactly how `CHANGELOG.md` starts: git-cliff replaces it only then, and would otherwise write a second one.
-- Released sections are never generated again: do not run `git cliff -o CHANGELOG.md`, which would replace them with the raw commits.
-
-### Project structure
-
-```text
-├── package.json         The extension manifest: commands, menus, views, settings
-├── CHANGELOG.md         The changes of each release (Keep a Changelog)
-├── cliff.toml           How git-cliff drafts the releases of CHANGELOG.md
-├── tsconfig.json
-├── typedoc.json         The API documentation's settings (npm run docs)
-├── assets/
-│   ├── swh-logo.svg     The activity bar icon (monochrome)
-│   └── swh-logo-128.png The extension's icon
-├── src/
-│   ├── extension.ts     Activation: wires everything and registers the commands
-│   ├── core/            Plain TypeScript, no `vscode` import; one package per concern
-│   │   ├── index.ts     The folder's public API: every package, re-exported
-│   │   ├── shared/      What every package uses; it imports no other
-│   │   │   ├── errors.ts      The error types: UserError, Cancelled
-│   │   │   ├── encoding.ts    Percent-encoding, query strings, base URLs
-│   │   │   ├── util.ts        Path ancestors, dates, time, and array helpers
-│   │   │   └── types.ts       Shared type helpers, e.g. Maybe<T>
-│   │   ├── origin.ts    Origins: normalizing remote URLs, and their encodings
-│   │   ├── swhid/       SWHIDs, as value objects
-│   │   │   ├── swhid.ts       Swhid: parsing, checking, canonical text; the scheme's version
-│   │   │   ├── qualifiers.ts  Qualifiers: the context of a SWHID, filtered and checked
-│   │   │   └── lineRange.ts   LineRange: the lines qualifier
-│   │   ├── git.ts       Running Git, and the temporary index copies
-│   │   ├── archive/     The Software Heritage client (class Swh): what the archive holds, with Git
-│   │   │   ├── index.ts       The package's exports
-│   │   │   ├── swh.ts         Swh itself: builds its parts; scans, refresh, why a file is not archived
-│   │   │   ├── workingTree.ts WorkingTree: SWHIDs of files and directories, anchored on archived commits
-│   │   │   ├── origins.ts     Origins: origins, visits, save requests
-│   │   │   ├── holdings.ts    Holdings: which SWHIDs the archive holds
-│   │   │   ├── archiveApi.ts  ArchiveApi: what the client asks the archive (an interface)
-│   │   │   ├── adapters/      Implementations of ArchiveApi
-│   │   │   │   ├── httpArchiveApi.ts  Over the archive's Web API: requests, token, rate limit
-│   │   │   │   ├── http.ts            HTTP requests, through fetch
-│   │   │   │   └── json.ts            The archive's JSON answers, checked and mapped
-│   │   │   ├── memo.ts        Memo: the archive's answers, remembered as long as they are trusted
-│   │   │   └── types.ts       The data it answers with, and what it needs from its host
-│   │   ├── citation/    Citations
-│   │   │   ├── bibtex.ts      BibtexEntry: the BibTeX format, its escaping
-│   │   │   ├── citation.ts    Citation: the archive's entry, or a minimal one
-│   │   │   └── citer.ts       Citer: cites files and repositories, with the archive and Git
-│   │   └── scan.ts      The scan as a tree, and its figures (pure functions)
-│   └── ui/              VS Code's side: everything here imports `vscode`
-│       ├── index.ts     The folder's public API, re-exported
-│       ├── apiToken.ts  The API token: the environment's, else the stored one
-│       ├── commands/    The commands, by group (class Commands)
-│       │   ├── index.ts     The folder's exports
-│       │   ├── commands.ts  Commands: builds the groups on one context
-│       │   ├── context.ts   What every group shares: the target, the repository, its origin
-│       │   ├── archive.ts   Status, visits, save requests, refresh
-│       │   ├── swhid.ts     SWHIDs, permalinks, Markdown links
-│       │   ├── citation.ts  BibTeX citations
-│       │   ├── misc.ts      Opening a SWHID, the Quick Pick menu
-│       │   └── register.ts  Registering the commands, and reporting their errors
-│       ├── menu.ts      The menu's entries, shared by the Menu view and the Quick Pick menu
-│       ├── menuView.ts  The Menu view
-│       ├── scanView.ts  The Scan view
-│       ├── statusBar.ts The archival status in the status bar
-│       ├── reports.ts   The read-only reports (visits, citations) and the SWHID links
-│       └── helpers.ts   Shared helpers: settings, messages, progress, the current file or folder
-└── test/
-    ├── swhid.test.ts        Unit tests: SWHIDs, origins, citations, the scan model
-    ├── citation.test.ts     Unit tests: citing files and repositories, on a stub client
-    ├── json.test.ts         Unit tests: the archive's JSON answers, mapped
-    ├── memo.test.ts         Unit tests: the memo's policies and stale answers, with a fake clock
-    ├── fakeArchive.test.ts  Unit tests: the client on a fake ArchiveApi, without HTTP
-    ├── repository.test.ts   Unit tests: the client on a temporary repository, and its HTTP adapter (batches, citations, rate limit), fetch mocked
-    └── smoke/               Smoke test in a real VS Code
-        ├── run.ts           Downloads VS Code and opens it on a temporary repository
-        └── suite.ts         Runs the commands in the extension host
-```
-
-`npm test` runs only the `*.test.ts` files, with Node: the smoke test needs VS Code's extension host.
-
-Only [extension.ts](src/extension.ts) and the modules in [src/ui/](src/ui/) import `vscode`. The modules in [src/core/](src/core/) are plain TypeScript, which is why the unit tests can run them with Node alone. Code that works without VS Code goes in `core/`, and the parts that need VS Code go in `ui/`.
-
-Within `core/`, each concern is a package: a folder with its own `index.ts` (`shared/`, `swhid/`, `archive/`, `citation/`), or a single file (`origin.ts`, `git.ts`, `scan.ts`). A package imports another only through its alias, `#core/<package>` (`import { Swhid } from '#core/swhid'`), which points at its `index.ts`; the files of one package import each other with relative paths. The packages depend on each other in one direction only: `shared` ← `origin` ← `swhid` ← `git` ← `archive` ← `citation`, `scan`. Each may import those to its left, never one to its right, so there is no cycle between them.
-
-Between folders, modules import through an alias, never a relative path that leaves their folder: `#core` and `#ui` for the whole of each (`import { Swh } from '#core'`), `#core/<package>` between the core's packages, and `#ui/<module>` or `#ui/commands` within the UI (`import { info } from '#ui/helpers'`). Within a folder, modules import each other with relative paths. The aliases are Node's [subpath imports](https://nodejs.org/api/packages.html#subpath-imports), defined in the `imports` field of [package.json](package.json): each points TypeScript at the sources (`types`) and Node at the compiled files in `out/` (`default`), which is why [tsconfig.json](tsconfig.json) uses `"module": "node16"`. A pattern such as `#core/*` maps a single file (`#core/origin` is `origin.ts`); a folder needs an entry of its own, as Node does not look for its `index.ts`: add one with each new folder. If `outDir` or the folders change, update both paths there. `Swh` is made of parts, each a small service of its own that `Swh` builds and gives what it needs: `Holdings` (what the archive holds) ← `Origins` (origins, visits, save requests) ← `WorkingTree` (the SWHIDs of files and directories). Each uses the parts to its left through their public methods only; `Swh` keeps the methods callers use, most of them done by a part. A folder's `index.ts` holds only its exports: the code lives in the other files.
-
-SWHIDs are values of the [`Swhid`](src/core/swhid/swhid.ts) class, not strings: `Swhid.of(type, hash)` and `Swhid.parse(text)` are the only ways to make one, and both check it, so a `Swhid` is always valid. It is immutable: `qualify({ origin, visit, anchor, path, lines })` gives a new one. Its qualifiers are a value too, [`Qualifiers`](src/core/swhid/qualifiers.ts): `Qualifiers.of` keeps only those its context allows (an origin and its visit only when public, a path only with an anchor), and `Qualifiers.parse` checks each one. Its `lines` are a value too, [`LineRange`](src/core/swhid/lineRange.ts), checked when made: a range from line 1, its last line its first or after. Two instances of the same SWHID are different objects, so compare them with `equals`, and key maps by `toString()`, the canonical text. SWHIDs become text only at the edges: the `ArchiveApi` port takes their text, as the Web API does, and so do the clipboard and the URLs. A SWHID the user typed, or found in a document, is passed on as written.
-
-Citations are split the same way. [`BibtexEntry`](src/core/citation/bibtex.ts) is the BibTeX format alone: it escapes each field as its kind needs, LaTeX's special characters in text such as the title, only the braces in the verbatim `url` and `swhid`, so that every entry is valid BibTeX. [`Citation`](src/core/citation/citation.ts) is the value a citation command gives: the archive's own entry, or a minimal one made as the archive would make it, and where it comes from. [`Citer`](src/core/citation/citer.ts) is the service that gathers what a citation needs, from the archive and from Git; the commands share one, through `CommandContext`.
-
-`Swh` never talks HTTP itself: it asks the archive through the [`ArchiveApi`](src/core/archive/archiveApi.ts) interface, in its own terms (SWHIDs, origins, visits, save requests, citations). [`HttpArchiveApi`](src/core/archive/adapters/httpArchiveApi.ts) implements it over the archive's Web API, and [extension.ts](src/extension.ts) passes it to `Swh`; the tests can pass a fake archive instead. This is the "ports and adapters" (hexagonal) architecture: the interface is the port, its implementations in `adapters/` the adapters. To support another way of reaching the archive, implement `ArchiveApi`; nothing else changes.
-
-The commands are grouped by concern in [src/ui/commands/](src/ui/commands/), one class per group, all built by `Commands`; the groups that need it share one `CommandContext`. A group gets the others it needs through its constructor: the citations use the SWHID commands, which use the archive commands to send save requests.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to report a bug, suggest a feature, or set up the project: the branches (Git Flow), the commit messages (Conventional Commits), the tests, the changelog, the releases, and the architecture.
 
 ## License
 
