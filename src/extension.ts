@@ -63,7 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
   const reports = new Reports();
   statusBar = new StatusBar(swh);
   const commands = new Commands(swh, reports, () => statusBar?.forget());
-  const scan = new ScanView(swh, () => commands.context.repoRoot());
+  const scan = new ScanView(swh);
 
   registerCommands(context, {
     // the archive: status, visits, save

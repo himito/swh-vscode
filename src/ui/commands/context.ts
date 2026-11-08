@@ -14,7 +14,7 @@
 import * as vscode from 'vscode';
 import { Cancelled, isPublicOrigin, type Maybe, parseOrigin, type Swh, UserError } from '#core';
 import type { Reports } from '../reports';
-import { ask, fileEditor, realCurrentDir, realpath, selectionLines, withoutContext } from '../helpers';
+import { ask, currentRepoRoot, fileEditor, realCurrentDir, realpath, selectionLines, withoutContext } from '../helpers';
 
 /**
  * The options a SWHID command accepts when not run on a `Uri`.
@@ -105,9 +105,7 @@ export class CommandContext {
    * directory is not inside a Git repository.
    */
   async repoRoot(): Promise<string> {
-    const root = await this.swh.git.root(await realCurrentDir());
-    if (!root) throw new UserError('Not inside a Git repository');
-    return root;
+    return currentRepoRoot(this.swh.git);
   }
 
   /**
@@ -231,12 +229,12 @@ export class CommandContext {
    * The target for the current directory.
    *
    * @returns The current directory's real path.
-   * @throws {@link core!UserError} when the current directory is not inside a Git repository.
+   * @throws {@link core!UserError} when no file or folder is open, or the
+   * current directory is not inside a Git repository.
    */
   private async currentDirTarget(): Promise<Target> {
-    const dir = await realCurrentDir();
-    if (!(await this.swh.git.root(dir))) throw new UserError('Not inside a Git repository');
-    return { path: dir };
+    await currentRepoRoot(this.swh.git);
+    return { path: await realCurrentDir() };
   }
 
   /**

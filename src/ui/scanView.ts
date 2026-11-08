@@ -18,7 +18,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { browseUrl, buildScan, type Maybe, Scan, ScanItem, type ScanStatus, scanSummary, shortSwhid, Swh, typeOf, UserError } from '#core';
-import { archiveUrl, info, openUrl } from './helpers';
+import { archiveUrl, currentRepoRoot, info, openUrl } from './helpers';
 import { openSwhidUri } from './reports';
 
 /** The icon and its theme color for each scan status: a codicon name and a theme color id. */
@@ -34,6 +34,20 @@ const STATUS_WORDS = {
   partial: 'partially archived',
   'not-archived': 'not archived',
 } as const satisfies Record<ScanStatus, string>;
+
+/** The id of the Scan view, as `package.json` declares it. */
+const SCAN_VIEW_ID = 'swh.scan';
+
+/**
+ * The directories a new scan shows unfolded: those not archived as a whole,
+ * and the root, always; an archived directory needs no looking into.
+ *
+ * @param scan - The scan.
+ * @returns The directories to unfold.
+ */
+function initiallyUnfolded(scan: Scan): ScanItem[] {
+  return scan.items.filter((scanItem) => scanItem.dir && (scanItem.status !== 'archived' || scanItem === scan.root));
+}
 
 /** What a scan item is: a directory, a file, or a submodule's commit. */
 type ItemKind = 'dir' | 'file' | 'submodule';
@@ -132,14 +146,9 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * Create the Scan view, empty until the first scan.
    *
    * @param swh - The backend that computes the archival status of the tree.
-   * @param repoRoot - Gives the root of the current repository, or throws a
-   * {@link core!UserError} outside one.
    */
-  constructor(
-    private swh: Swh,
-    private repoRoot: () => Promise<string>,
-  ) {
-    this.view = vscode.window.createTreeView('swh.scan', { treeDataProvider: this, showCollapseAll: true });
+  constructor(private readonly swh: Swh) {
+    this.view = vscode.window.createTreeView(SCAN_VIEW_ID, { treeDataProvider: this, showCollapseAll: true });
     this.disposables.push(
       this.view,
       this.emitter,
@@ -228,33 +237,69 @@ export class ScanView implements vscode.TreeDataProvider<ScanItem>, vscode.Dispo
    * @throws {@link core!UserError} when the current directory is not in a Git repository.
    */
   async run(): Promise<void> {
-    const root = await this.repoRoot();
-    const id = ++this.scanId;
+    const root = await currentRepoRoot(this.swh.git);
+    const scanId = this.startScan(root);
+    await vscode.commands.executeCommand(`${SCAN_VIEW_ID}.focus`);
+    try {
+      const nodes = await vscode.window.withProgress({ location: { viewId: SCAN_VIEW_ID } }, () => this.swh.tree(root));
+      if (this.isSuperseded(scanId)) return;
+      this.showScan(root, buildScan(nodes));
+    } catch (error) {
+      if (this.isSuperseded(scanId)) return;
+      this.showFailure(error);
+    }
+  }
+
+  /**
+   * Starts a scan: forgets the previous one, and says the scan is under way.
+   *
+   * @param root - The root of the repository scanned.
+   * @returns The new scan's number, see {@link ScanView.isSuperseded}.
+   */
+  private startScan(root: string): number {
+    const scanId = ++this.scanId;
     this.root = root;
     this.scan = undefined;
     this.expanded.clear();
     this.view.message = `Scanning ${root}…`;
     this.view.description = undefined;
     this.emitter.fire(undefined);
-    await vscode.commands.executeCommand('swh.scan.focus');
-    try {
-      const nodes = await vscode.window.withProgress({ location: { viewId: 'swh.scan' } }, () => this.swh.tree(root));
-      if (id !== this.scanId) return;
-      const scan = buildScan(nodes);
-      // archived directories start folded; the root always starts unfolded
-      for (const scanItem of scan.items) {
-        const unfolded = scanItem.dir && (scanItem.status !== 'archived' || scanItem === scan.root);
-        if (unfolded) this.expanded.add(scanItem);
-      }
-      this.scan = scan;
-      this.view.message = `${root} (tracked working tree)\n${scanSummary(scan)}`;
-      this.view.description = `${scan.archivedFiles} of ${scan.files} files archived`;
-      this.emitter.fire(undefined);
-    } catch (error) {
-      if (id !== this.scanId) return;
-      this.view.message = `Scan failed: ${(error as Error)?.message ?? error}`;
-      this.emitter.fire(undefined);
-    }
+    return scanId;
+  }
+
+  /**
+   * Whether a newer scan has started since a scan did: its result is then dropped.
+   *
+   * @param scanId - The scan's number, as {@link ScanView.startScan} gave it.
+   * @returns `true` when a newer scan has started.
+   */
+  private isSuperseded(scanId: number): boolean {
+    return scanId !== this.scanId;
+  }
+
+  /**
+   * Shows a finished scan: its tree, and its figures in the view's message
+   * and description.
+   *
+   * @param root - The root of the repository scanned.
+   * @param scan - The scan.
+   */
+  private showScan(root: string, scan: Scan): void {
+    for (const dir of initiallyUnfolded(scan)) this.expanded.add(dir);
+    this.scan = scan;
+    this.view.message = `${root} (tracked working tree)\n${scanSummary(scan)}`;
+    this.view.description = `${scan.archivedFiles} of ${scan.files} files archived`;
+    this.emitter.fire(undefined);
+  }
+
+  /**
+   * Shows why a scan failed, in the view's message.
+   *
+   * @param error - What the scan threw.
+   */
+  private showFailure(error: unknown): void {
+    this.view.message = `Scan failed: ${(error as Error)?.message ?? error}`;
+    this.emitter.fire(undefined);
   }
 
   /**

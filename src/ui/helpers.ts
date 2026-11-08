@@ -13,7 +13,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { lineRange, type Maybe, UserError } from '#core';
+import { type Git, lineRange, type Maybe, UserError } from '#core';
 
 /**
  * The extension's settings, the `swh.*` section of the configuration.
@@ -144,6 +144,20 @@ export function currentDir(): string {
  */
 export async function realCurrentDir(): Promise<string> {
   return realpath(currentDir());
+}
+
+/**
+ * The root of the Git repository of the current directory.
+ *
+ * @param git - The Git runner.
+ * @returns The repository's root.
+ * @throws {@link core!UserError} when no file or folder is open, or the current
+ * directory is not inside a Git repository.
+ */
+export async function currentRepoRoot(git: Git): Promise<string> {
+  const root = await git.root(await realCurrentDir());
+  if (!root) throw new UserError('Not inside a Git repository');
+  return root;
 }
 
 /**
