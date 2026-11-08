@@ -39,11 +39,11 @@ export type Status = 'archived' | 'not-archived' | 'origin-archived' | 'pending'
  * setting does not override them.
  */
 const DEFAULT_LIGHTERS: Record<Status, string> = {
-  archived: 'SWH✓',
-  'not-archived': 'SWH✗',
-  'origin-archived': 'SWH~',
-  pending: 'SWH…',
-  error: 'SWH!',
+  archived: '$(pass) SWH',
+  'not-archived': '$(error) SWH',
+  'origin-archived': '$(circle-large-outline) SWH',
+  pending: '$(sync~spin) SWH',
+  error: '$(warning) SWH',
 };
 
 /** Each status in words, for the item's tooltip. */

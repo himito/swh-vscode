@@ -345,13 +345,13 @@
         "swh.statusBar.lighters": {
           "type": "object",
           "default": {
-            "archived": "SWH✓",
-            "not-archived": "SWH✗",
-            "origin-archived": "SWH~",
-            "pending": "SWH…",
-            "error": "SWH!"
+            "archived": "$(pass) SWH",
+            "not-archived": "$(error) SWH",
+            "origin-archived": "$(circle-large-outline) SWH",
+            "pending": "$(sync~spin) SWH",
+            "error": "$(warning) SWH"
           },
-          "markdownDescription": "Status bar texts by archival status. `origin-archived`: the file is not archived, but its origin is."
+          "markdownDescription": "Status bar texts by archival status. `origin-archived`: the file is not archived, but its origin is. `$(name)` shows the [codicon](https://code.visualstudio.com/api/references/icons-in-labels#icon-listing) of that name."
         },
         "swh.documentLinks.enabled": {
           "type": "boolean",

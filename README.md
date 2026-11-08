@@ -71,15 +71,15 @@ By default, the SWHID commands give a *qualified* SWHID, with its context: `orig
 
 ### Status bar
 
-The status bar shows whether the current file is archived. With no file open, it shows the same for the workspace folder:
+The status bar shows whether the current file is archived, with the same icons as the Scan view. With no file open, it shows the same for the workspace folder:
 
-- `SWH✓` archived
-- `SWH✗` not archived
-- `SWH~` not archived, but the origin is
-- `SWH…` checking
-- `SWH!` the check failed
+- a check mark, archived
+- a cross, not archived
+- an empty circle, not archived, but the origin is
+- a spinner, checking
+- a warning sign, the check failed
 
-The status is checked when you switch to a file and each time you save it. Click the item to copy the SWHID. Without a token, the item also shows how many API requests you have used this hour, e.g. `SWH✓ 48/120`.
+The status is checked when you switch to a file and each time you save it. Click the item to copy the SWHID. Without a token, the item also shows how many API requests you have used this hour, e.g. `SWH 48/120`.
 
 ### Scan view
 
@@ -105,7 +105,7 @@ Either set the `SWH_API_TOKEN` environment variable, or run **Software Heritage:
 | `swh.archiveUrl` | `https://archive.softwareheritage.org` | The archive's web root. SWHIDs resolve there, and its Web API is at `/api/1` |
 | `swh.swhidWithoutContext` | `false` | SWHID commands give bare SWHIDs |
 | `swh.statusBar.enabled` | `true` | Show the archival status in the status bar |
-| `swh.statusBar.lighters` | `SWH✓` … | The status bar texts, by status |
+| `swh.statusBar.lighters` | `$(pass) SWH` … | The status bar texts, by status; `$(name)` shows the [codicon](https://code.visualstudio.com/api/references/icons-in-labels#icon-listing) of that name |
 | `swh.documentLinks.enabled` | `true` | Make SWHIDs in documents clickable |
 | `swh.gitPath` | `git` | The git executable |
 
