@@ -16,8 +16,6 @@ import type { Holdings } from './holdings';
 import type { Origins } from './origins';
 import type { FileStatus, SwhidInfo } from './types';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
  * The SWHID of a commit.
  *
@@ -389,7 +387,12 @@ export class WorkingTree {
   }
 
   /**
-   * The qualified SWHID of a file or directory, from Git and the archive's API.
+   * The qualified SWHID of a file or directory, checked against the archive:
+   * from Git and the archive's API.
+   *
+   * @remarks
+   * {@link WorkingTree.qualifiedSwhid} falls back to the SWHID from Git alone,
+   * `unchecked`, when this fails.
    *
    * @param file - The real path.
    * @param root - The root of the repository holding it, if any.
@@ -402,7 +405,7 @@ export class WorkingTree {
    * @returns The SWHID's details.
    * @throws {@link UserError} when Git or the archive fails.
    */
-  private async directSwhid(
+  private async checkedSwhid(
     file: string,
     root: Maybe<string>,
     lines: Maybe<LineRange>,
@@ -481,7 +484,7 @@ export class WorkingTree {
     let swhid: Promise<Swhid> | undefined;
     const worktree = () => (swhid ??= this.worktreeSwhid(file, root));
     try {
-      return await this.directSwhid(file, root, lines, archivedVersion, worktree);
+      return await this.checkedSwhid(file, root, lines, archivedVersion, worktree);
     } catch (error) {
       if (!(error instanceof UserError)) throw error;
 
@@ -502,7 +505,7 @@ export class WorkingTree {
    */
   async fileStatus(file: string, coreSwhid?: Swhid): Promise<FileStatus> {
     const swhid = coreSwhid ?? (await this.contentSwhid(file, await this.git.root(file)));
-    return { swhid: swhid, archived: await this.holdings.isArchived(swhid) };
+    return { swhid, archived: await this.holdings.isArchived(swhid) };
   }
 
   /**
@@ -523,20 +526,66 @@ export class WorkingTree {
   async headTree(dir: string, root: string): Promise<Maybe<string>> {
     // in a copy: refreshing the dates writes the index
     return this.git.withIndexCopy(root, async (env) => {
+      // a file whose date alone changed is then no difference
       await this.git.run(root, ['update-index', '-q', '--refresh'], { env });
-      if ((await this.git.run(dir, ['diff-files', '--quiet', '--', '.'], { env })).status !== 0) return undefined;
-      if ((await this.git.run(dir, ['diff-index', '--cached', '--quiet', 'HEAD', '--', '.'], { env })).status !== 0) return undefined;
+      if (!(await this.isAsInHead(dir, env))) return undefined;
       return this.git.get(dir, ['rev-parse', '--verify', '-q', 'HEAD:./'], env);
     });
+  }
+
+  /**
+   * Whether the tracked files of a directory are as HEAD has them.
+   *
+   * @param dir - The directory.
+   * @param env - The environment of the Git commands, with the index to use.
+   * @returns `true` when no file differs: neither modified in the working
+   * tree, compared with the index, nor staged, compared with HEAD; `false`
+   * too when Git cannot tell, e.g. without a HEAD commit.
+   */
+  private async isAsInHead(dir: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+    const unmodified = await this.findsNoDifference(dir, ['diff-files'], env);
+    return unmodified && (await this.findsNoDifference(dir, ['diff-index', '--cached', 'HEAD'], env));
+  }
+
+  /**
+   * Runs a Git diff of a directory, quietly.
+   *
+   * @param dir - The directory.
+   * @param diff - The diff command and what it compares, e.g. `['diff-files']`.
+   * @param env - The environment of the Git command.
+   * @returns `true` when the diff finds no difference: its exit status is 0,
+   * which a difference makes 1 and a failure more.
+   */
+  private async findsNoDifference(dir: string, diff: string[], env: NodeJS.ProcessEnv): Promise<boolean> {
+    const result = await this.git.run(dir, [...diff, '--quiet', '--', '.'], { env });
+    return result.status === 0;
   }
 
   /**
    * Whether a directory holds untracked files that Git does not ignore.
    *
    * @param dir - The directory's path.
-   * @returns `true` when it holds at least one.
+   * @returns `true` when it holds at least one; `false` when Git lists none,
+   * or cannot list them.
    */
   async untracked(dir: string): Promise<boolean> {
-    return !!(await this.git.get(dir, ['ls-files', '--others', '--exclude-standard', '--directory', '--no-empty-directory', '-z', '--', '.']));
+    const listUntracked = [
+      'ls-files',
+      // the files Git does not track…
+      '--others',
+      // …and does not ignore, by .gitignore and the like
+      '--exclude-standard',
+      // an untracked directory as one entry, rather than each file in it
+      '--directory',
+      // but not an empty one: Git cannot track it
+      '--no-empty-directory',
+      // the names as they are, separated by NUL bytes
+      '-z',
+      '--',
+      '.',
+    ];
+    const listed = await this.git.get(dir, listUntracked);
+    // Git lists nothing when there are none, which `get` gives as `undefined`
+    return listed !== undefined;
   }
 }

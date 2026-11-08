@@ -161,6 +161,49 @@ test('worktree tree leaves the index alone', async () => {
   assert.equal(await s.headTree(dir, dir), head);
 });
 
+// A directory's tree in HEAD only when its tracked files are HEAD's: a change
+// only staged counts, a file whose date alone changed does not; the user's
+// index is left as it was.
+test('head tree: staged changes and dates', async () => {
+  const s = swh();
+  const head = git('rev-parse', 'HEAD^{tree}');
+  const index = () => git('ls-files', '--stage', '--debug');
+  try {
+    // only staged: the working tree matches the index, the index not HEAD
+    writeFileSync(path.join(dir, 'a.txt'), 'staged\n');
+    git('add', 'a.txt');
+    const staged = index();
+    assert.equal(await s.headTree(dir, dir), undefined);
+    assert.equal(index(), staged, 'the index is left alone');
+  } finally {
+    git('reset', '-q', '--', 'a.txt');
+    git('checkout', '-q', 'a.txt');
+  }
+  // the date alone changed: unchanged
+  const later = new Date(Date.now() + 60_000);
+  await fs.utimes(path.join(dir, 'a.txt'), later, later);
+  assert.equal(await s.headTree(dir, dir), head);
+});
+
+// Untracked files count only when Git does not ignore them; an empty
+// directory, which Git cannot track, does not count either.
+test('untracked files', async () => {
+  const s = swh();
+  const scratch = path.join(dir, 'scratch');
+  mkdirSync(scratch);
+  try {
+    assert.equal(await s.untracked(scratch), false, 'an empty directory');
+    writeFileSync(path.join(scratch, '.gitignore'), '*\n');
+    writeFileSync(path.join(scratch, 'ignored.log'), 'ignored\n');
+    assert.equal(await s.untracked(scratch), false, 'only ignored files');
+    await fs.rm(path.join(scratch, '.gitignore'));
+    assert.equal(await s.untracked(scratch), true, 'a file Git does not ignore');
+  } finally {
+    await fs.rm(scratch, { recursive: true, force: true });
+  }
+  assert.equal(await s.untracked(dir), false, 'a clean repository');
+});
+
 // An archived directory covers everything under it: the archive is asked only
 // about what no archived directory covers, directories first.
 test('direct tree is Merkle-pruned', async () => {
