@@ -41,6 +41,13 @@ jobs:
           files: vscode-swh-${{ github.ref_name }}.vsix
           generate_release_notes: true
 
+      # the same package, for the Open VSX job
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: vscode-swh-${{ github.ref_name }}.vsix
+          if-no-files-found: error
+
   publish:
     # Only publish to the Marketplace once tests, the tag check and the GitHub Release succeeded.
     needs: release
@@ -59,3 +66,20 @@ jobs:
       - run: npm ci
 
       - run: npx --yes @vscode/vsce publish --oidc
+
+  open-vsx:
+    # Publishes to Open VSX (https://open-vsx.org) the .vsix of the GitHub Release
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+
+      - name: Publish to Open VSX
+        uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.OVSX_PAT }}
+          extensionFile: vscode-swh-${{ github.ref_name }}.vsix

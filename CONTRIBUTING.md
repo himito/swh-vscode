@@ -158,7 +158,7 @@ The type tells whether users see the change, and the changelog is drafted from i
 2. Set the version in `package.json`.
 3. Run `npm run changelog:release`. It drafts the release at the top of `CHANGELOG.md`, right below its header: its heading and date, then the entries from the commits. Curate it: reword the entries for users, and add what the commits do not say. Commit it.
 4. Finish the release: `git flow release finish X.Y.Z` merges it into `main` and `develop`, and tags it `vX.Y.Z`. Push `main`, `develop` and the tag.
-5. Pushing the tag runs the [Release workflow](.github/workflows/release.yml): it runs the tests, checks that the tag matches `package.json`, packages the extension and creates the GitHub Release with the `.vsix`.
+5. Pushing the tag runs the [Release workflow](.github/workflows/release.yml): it runs the tests, checks that the tag matches `package.json`, packages the extension and creates the GitHub Release with the `.vsix`. Then it publishes the extension to the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=himito.vscode-swh), authenticated through OIDC, and the same `.vsix` to [Open VSX](https://open-vsx.org/extension/himito/vscode-swh), with the `OVSX_PAT` secret.
 
 ### Project structure
 
