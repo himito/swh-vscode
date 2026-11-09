@@ -52,6 +52,12 @@ export async function run() {
     `[a.txt, lines 2-3](https://archive.softwareheritage.org/swh:1:cnt:${hash};lines=2-3)`,
   );
 
+  // the Menu view's Without context switch toggles its setting, there and back
+  await vscode.commands.executeCommand('swh.toggleWithoutContext');
+  assert.equal(vscode.workspace.getConfiguration('swh').get('swhidWithoutContext'), true);
+  await vscode.commands.executeCommand('swh.toggleWithoutContext');
+  assert.equal(vscode.workspace.getConfiguration('swh').get('swhidWithoutContext'), false);
+
   // a blank archive URL, as the Settings UI stores a cleared field, is the default one
   const settings = vscode.workspace.getConfiguration('swh');
   await settings.update('archiveUrl', '  ', vscode.ConfigurationTarget.Global);

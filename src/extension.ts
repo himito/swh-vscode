@@ -24,6 +24,7 @@ import {
   envToken,
   info,
   MenuView,
+  toggleWithoutContext,
   registerCommands,
   REPORT_SCHEME,
   Reports,
@@ -85,6 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
     'swh.cite': (input?: CommandInput) => commands.citation.cite(false, input),
     'swh.citeOther': () => commands.citation.cite(true),
     'swh.openSwhid': (swhid?: string) => commands.misc.openSwhid(swhid),
+    'swh.toggleWithoutContext': () => toggleWithoutContext(),
     'swh.statusBarCopy': () => copyStatusBarSwhid(commands.swhid, statusBar),
 
     // the API token

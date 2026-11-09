@@ -5,7 +5,7 @@
  * {@link MenuView} fills the `swh.actions` tree view with the commands, in
  * groups. Clicking an entry runs its command, on the current file,
  * selection or folder, as from the Command Palette. One entry is a
- * checkbox: *Without context* switches the `swh.swhidWithoutContext`
+ * switch: clicking *Without context* toggles the `swh.swhidWithoutContext`
  * setting, which makes the SWHID commands give bare SWHIDs.
  *
  * The menu's groups and entries are defined in {@link MENU}, shared with
@@ -25,6 +25,9 @@ type MenuNode = MenuGroup | MenuEntry;
 /** The id of the Menu view, as `package.json` declares it. */
 const MENU_VIEW_ID = 'swh.actions';
 
+/** The id of the command that toggles the *Without context* switch, as `package.json` declares it. */
+export const TOGGLE_WITHOUT_CONTEXT_COMMAND = 'swh.toggleWithoutContext';
+
 /**
  * Whether a node of the tree is a group.
  *
@@ -36,7 +39,15 @@ function isGroup(node: MenuNode): node is MenuGroup {
 }
 
 /**
- * Sets `swh.swhidWithoutContext`, as the Menu view's checkbox does.
+ * Toggles `swh.swhidWithoutContext`, as clicking the *Without context*
+ * switch of the Menu view does: implements `swh.toggleWithoutContext`.
+ */
+export async function toggleWithoutContext(): Promise<void> {
+  await setWithoutContext(!withoutContext());
+}
+
+/**
+ * Sets `swh.swhidWithoutContext`.
  *
  * @remarks
  * The value is written to the workspace settings when they already define
@@ -72,9 +83,9 @@ function groupItem(group: MenuGroup): vscode.TreeItem {
  * The tree item of an entry.
  *
  * @remarks
- * A command entry runs its command when clicked. The switch is shown as a
- * checkbox, checked when `swh.swhidWithoutContext` is on, and its
- * description tells which SWHIDs the commands give.
+ * A command entry runs its command when clicked. The switch toggles
+ * `swh.swhidWithoutContext` when clicked; its icon, filled when on, and its
+ * description tell which SWHIDs the commands give.
  *
  * @param entry - The entry.
  * @returns The tree item.
@@ -84,7 +95,7 @@ function entryItem(entry: MenuEntry): vscode.TreeItem {
   item.id = `${entry.label}:${entry.command ?? ''}`;
 
   if (entry.icon) item.iconPath = new vscode.ThemeIcon(entry.icon);
-  if (entry.toggle) showAsWithoutContextSwitch(item);
+  if (entry.toggle) showAsWithoutContextSwitch(item, entry);
   else showAsCommand(item, entry);
 
   return item;
@@ -104,15 +115,19 @@ function showAsCommand(item: vscode.TreeItem, entry: MenuEntry): void {
 }
 
 /**
- * Shows the *Without context* switch on its tree item: a checkbox, checked
- * when the setting is on, and a description of the SWHIDs the commands give.
+ * Shows the *Without context* switch on its tree item: its icon, filled
+ * when the setting is on, a description of the SWHIDs the commands give,
+ * and clicking it toggles the setting.
  *
  * @param item - The switch's tree item.
+ * @param entry - The switch's entry, with its icons.
  */
-function showAsWithoutContextSwitch(item: vscode.TreeItem): void {
+function showAsWithoutContextSwitch(item: vscode.TreeItem, entry: MenuEntry): void {
   const bare = withoutContext();
-  item.checkboxState = bare ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
+  const icon = bare ? entry.iconOn : entry.icon;
+  if (icon) item.iconPath = new vscode.ThemeIcon(icon);
   item.description = bare ? 'bare SWHIDs' : 'qualified SWHIDs';
+  item.command = { command: TOGGLE_WITHOUT_CONTEXT_COMMAND, title: entry.label };
   item.tooltip = `Whether the SWHID commands give the bare SWHID, without its context (swh.${WITHOUT_CONTEXT_SETTING})`;
 }
 
@@ -120,9 +135,9 @@ function showAsWithoutContextSwitch(item: vscode.TreeItem): void {
  * The data provider of the Menu view.
  *
  * @remarks
- * The *Without context* checkbox writes the `swh.swhidWithoutContext`
- * setting, see `setWithoutContext`. The view also redraws when that
- * setting changes elsewhere, so the checkbox always reflects it.
+ * The *Without context* switch toggles the `swh.swhidWithoutContext`
+ * setting, see {@link toggleWithoutContext}. The view redraws when that
+ * setting changes, wherever it is changed, so the switch always shows it.
  */
 export class MenuView implements vscode.TreeDataProvider<MenuNode>, vscode.Disposable {
   /** Fires when the menu must be redrawn: the switch's setting changed. */
@@ -132,30 +147,19 @@ export class MenuView implements vscode.TreeDataProvider<MenuNode>, vscode.Dispo
   /** The view and the event listeners, disposed of with the provider. */
   private readonly disposables: vscode.Disposable[] = [];
 
-  /** Create the Menu view, and follow its checkbox and the setting it switches. */
+  /** Create the Menu view, and follow the setting its switch toggles. */
   constructor() {
     const view = vscode.window.createTreeView(MENU_VIEW_ID, { treeDataProvider: this });
     this.disposables.push(
       view,
       this.emitter,
-      view.onDidChangeCheckboxState((event) => this.onCheckboxChange(event)),
       vscode.workspace.onDidChangeConfiguration((event) => this.onConfigurationChange(event)),
     );
   }
 
   /**
-   * Writes the *Without context* setting when its checkbox is clicked.
-   *
-   * @param event - The checkboxes that changed, and their new states.
-   */
-  private async onCheckboxChange(event: vscode.TreeCheckboxChangeEvent<MenuNode>): Promise<void> {
-    const toggle = event.items.find(([node]) => !isGroup(node) && node.toggle);
-    if (toggle) await setWithoutContext(toggle[1] === vscode.TreeItemCheckboxState.Checked);
-  }
-
-  /**
    * Redraws the menu when the *Without context* setting changes, wherever
-   * it is changed, so that the checkbox always shows it.
+   * it is changed, so that the switch always shows it.
    *
    * @param event - What changed in the settings.
    */

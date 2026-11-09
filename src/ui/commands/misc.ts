@@ -43,8 +43,8 @@ function menuSeparator(label: string): MenuItem {
  * The Quick Pick item of a menu entry.
  *
  * @remarks
- * The *Without context* switch shows its state in its icon and description;
- * it changes nothing but this use of the menu.
+ * The *Without context* switch shows its state in its icon, filled when
+ * on, and in its description; it changes nothing but this use of the menu.
  *
  * @param entry - The entry, from {@link MENU}.
  * @param bare - The state of the *Without context* switch.
@@ -52,8 +52,9 @@ function menuSeparator(label: string): MenuItem {
  */
 function menuItem(entry: MenuEntry, bare: boolean): MenuItem {
   if (entry.toggle) {
+    const icon = bare ? entry.iconOn : entry.icon;
     return {
-      label: `$(${bare ? 'pass-filled' : 'circle-large-outline'}) ${entry.label}`,
+      label: `$(${icon}) ${entry.label}`,
       description: bare ? 'on: bare SWHIDs' : 'off: qualified SWHIDs',
       toggle: true,
     };

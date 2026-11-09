@@ -19,8 +19,10 @@ export type MenuEntry = {
   label: string;
   /** Shown after the label, dimmed. */
   description?: string;
-  /** The name of the codicon shown before the label, e.g. `copy`. */
+  /** The name of the codicon shown before the label, e.g. `copy`; for the switch, when off. */
   icon?: string;
+  /** For the switch, the codicon shown when on. */
+  iconOn?: string;
   /** The id of the command the entry runs. */
   command?: string;
   /** Whether the command is a SWHID command, which takes the `bare` option. */
@@ -56,7 +58,7 @@ export const MENU: readonly MenuGroup[] = [
     label: 'SWHID',
     inQuickPick: true,
     entries: [
-      { label: 'Without context', toggle: true },
+      { label: 'Without context', icon: 'filter', iconOn: 'filter-filled', toggle: true },
       { label: 'Copy', description: 'SWHID of the file, selection or directory', icon: 'copy', command: 'swh.swhidCopy', takesBare: true },
       { label: 'Copy the archived version', description: 'SWHID of the version SWH holds', icon: 'versions', command: 'swh.swhidCopyArchived', takesBare: true },
       { label: 'Open in the archive', icon: 'link-external', command: 'swh.swhidOpen', takesBare: true },

@@ -30,7 +30,7 @@ Install it from the [Visual Studio Marketplace](https://marketplace.visualstudio
 
 The activity bar has a Software Heritage icon (the SWH logo). It opens two views:
 
-- **Menu**: the commands below, in groups. Click one to run it on the current file, selection or folder. The *Without context* checkbox switches `swh.swhidWithoutContext` on or off.
+- **Menu**: the commands below, in groups. Click one to run it on the current file, selection or folder. Click *Without context* to switch `swh.swhidWithoutContext` on or off; its filter icon is filled when it is on.
 - **Scan**: the scan of the repository (see [Scan view](#scan-view)).
 
 ## Commands
@@ -52,6 +52,7 @@ All commands are in the Command Palette under **Software Heritage:**. Most of th
 | **Scan** | Show the repository's tracked files as a tree, archived or not |
 | **Refresh** | Forget what may have changed in the SWH archive |
 | **Open a SWHID in the archive…** | Prompt for a SWHID and open it |
+| **Toggle SWHIDs without context** | Switch `swh.swhidWithoutContext` on or off |
 | **Set API token** / **Clear API token** | Store the token in VS Code's secret storage |
 
 **Status**, **Visits**, **Save** and **Cite** ask for the URL of a public repository when there is no public origin here. To ask about another repository anyway, use the **… of another repository…** variants.

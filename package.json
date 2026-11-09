@@ -178,6 +178,11 @@
         "category": "Software Heritage"
       },
       {
+        "command": "swh.toggleWithoutContext",
+        "title": "Toggle SWHIDs without context",
+        "category": "Software Heritage"
+      },
+      {
         "command": "swh.setToken",
         "title": "Set API token",
         "category": "Software Heritage"
